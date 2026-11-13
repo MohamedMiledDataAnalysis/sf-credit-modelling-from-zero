@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+# Outputs created when running the listings
+figures/*.png
+outputs/*
+!outputs/.gitkeep
+# The book itself is not part of this repository
+*.pdf
+*.epub
+# OS
+.DS_Store
+Thumbs.db

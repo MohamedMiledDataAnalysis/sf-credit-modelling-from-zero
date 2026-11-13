@@ -1,0 +1,29 @@
+# Run the capstone tests on every push and pull request (Chapter 22)
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies and the package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e capstone
+      - name: Run the unit tests
+        run: python -m pytest capstone/tests -q
+      - name: Run the rating model end to end
+        run: python capstone/run_rating.py --output-dir outputs

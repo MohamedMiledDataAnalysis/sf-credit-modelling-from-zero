@@ -1,0 +1,59 @@
+{
+  "deal_name": "Thamesbridge Mortgages No. 1 plc",
+  "originator": "Thamesbridge Building Society (fictional)",
+  "closing_date": "2020-01-31",
+  "cut_off_date": "2019-12-31",
+  "pool_balance": 1736526998.32,
+  "payment_frequency": "monthly",
+  "reference_rate": "SONIA",
+  "senior_fees_bps_per_year": 20,
+  "reserve_fund_target_pct": 0.015,
+  "reserve_fund_funded_by": "subordinated loan from the originator",
+  "excess_spread_used_to_cure_losses": true,
+  "principal_waterfall": "sequential",
+  "tranches": [
+    {
+      "class": "A",
+      "share_of_pool": 0.88,
+      "balance": 1528143758.52,
+      "margin_pct": 0.45,
+      "target_rating_illustrative": "AAA"
+    },
+    {
+      "class": "B",
+      "share_of_pool": 0.04,
+      "balance": 69461079.93,
+      "margin_pct": 0.9,
+      "target_rating_illustrative": "AA"
+    },
+    {
+      "class": "C",
+      "share_of_pool": 0.03,
+      "balance": 52095809.95,
+      "margin_pct": 1.4,
+      "target_rating_illustrative": "A"
+    },
+    {
+      "class": "D",
+      "share_of_pool": 0.025,
+      "balance": 43413174.96,
+      "margin_pct": 2.2,
+      "target_rating_illustrative": "BBB"
+    },
+    {
+      "class": "E",
+      "share_of_pool": 0.015,
+      "balance": 26047904.97,
+      "margin_pct": 3.5,
+      "target_rating_illustrative": "BB"
+    },
+    {
+      "class": "Z",
+      "share_of_pool": 0.01,
+      "balance": 17365269.98,
+      "margin_pct": null,
+      "target_rating_illustrative": "NR"
+    }
+  ],
+  "note": "Fictional transaction for teaching. Not based on any real deal."
+}

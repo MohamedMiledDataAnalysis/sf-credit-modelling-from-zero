@@ -1,0 +1,7 @@
+rating,default_multiple,market_value_decline_pct,prepayment_stress,target_loss_quantile,note
+AAA,5.0,45,low,0.9999,Illustrative teaching values
+AA,4.0,38,low,0.999,Illustrative teaching values
+A,3.0,32,low,0.995,Illustrative teaching values
+BBB,2.0,25,base,0.98,Illustrative teaching values
+BB,1.5,18,base,0.95,Illustrative teaching values
+B,1.2,12,base,0.9,Illustrative teaching values

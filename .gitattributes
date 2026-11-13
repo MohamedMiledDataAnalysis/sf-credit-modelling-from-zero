@@ -1,0 +1,6 @@
+# Keep the data files byte for byte as generated: line feed endings,
+# so that hashes match on every system and BULK INSERT can use
+# ROWTERMINATOR = '0x0a' (sql/sqlserver/02_load_data.sql).
+*.csv -text
+*.gz binary
+*.json -text
