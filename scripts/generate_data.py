@@ -9,17 +9,19 @@ Run from the repository root:
 
     python scripts/generate_data.py
 
-Files written to data/:
-    macro.csv                     monthly UK-style macro series, Jan 2020 - Dec 2024
-    rmbs_loans.csv                10,000 residential mortgages at the pool cut-off date
-    rmbs_performance.csv.gz       monthly status and balance of every mortgage, 60 months
-    rmbs_defaults.csv             one row per defaulted mortgage: balance, recovery, loss
-    rmbs_deal.json                capital structure of Thamesbridge Mortgages No. 1
-    cmbs_loans.csv                120 commercial real estate loans with outcomes
-    auto_loans.csv                8,000 car finance loans with survival-style outcomes
-    clo_portfolio.csv             150 leveraged loans in a CLO portfolio
-    rating_default_table.csv      illustrative cumulative default probabilities by rating
-    rating_stresses.csv           illustrative rating-level stress assumptions
+Files written to data/raw/, in the formats of real work (see
+data/raw/data_dictionary.xlsx and Chapter 4):
+    uk_rmbs/      UK RRE loan-level template (RREL, RREC), originator
+                  additional data, deal summary, 60 monthly servicer
+                  reports, losses report, investor report (Annex 12)
+    economic/     Bank of England, ONS and HM Land Registry layouts,
+                  internal credit cycle index
+    uk_auto/      UK automobile loan-level template (AUTL)
+    cmbs/         special servicer loan history report
+    clo/          CLO trustee report, collateral portfolio
+    assumptions/  rating criteria tables (illustrative)
+
+Then run scripts/prepare_data.py to build the model tables in data/.
 """
 
 from __future__ import annotations
@@ -29,6 +31,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+import write_raw
 
 SEED = 2026
 ROOT = Path(__file__).resolve().parents[1]
@@ -478,18 +482,10 @@ def main():
     auto = make_auto(rng)
     clo = make_clo(rng)
 
-    macro.to_csv(DATA / "macro.csv", index=False)
-    loans.to_csv(DATA / "rmbs_loans.csv", index=False)
-    perf.to_csv(DATA / "rmbs_performance.csv.gz", index=False,
-                compression={"method": "gzip", "mtime": 0})
-    defaults.to_csv(DATA / "rmbs_defaults.csv", index=False)
-    (DATA / "rmbs_deal.json").write_text(json.dumps(deal, indent=2))
-    cmbs.to_csv(DATA / "cmbs_loans.csv", index=False)
-    auto.to_csv(DATA / "auto_loans.csv", index=False)
-    clo.to_csv(DATA / "clo_portfolio.csv", index=False)
-    make_rating_table().to_csv(DATA / "rating_default_table.csv", index=False)
-    make_rating_stresses().to_csv(DATA / "rating_stresses.csv", index=False)
-    print("Datasets written to", DATA)
+    write_raw.write_all(DATA / "raw", np.random.default_rng(SEED + 1),
+                        macro, loans, perf, defaults, deal, cmbs, auto, clo,
+                        make_rating_table(), make_rating_stresses())
+    print("Raw files written to", DATA / "raw")
 
 
 if __name__ == "__main__":

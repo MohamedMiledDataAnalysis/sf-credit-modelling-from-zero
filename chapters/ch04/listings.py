@@ -176,6 +176,65 @@ plt.savefig("figures/ch04_default_by_ltv.png")
 print(rate_by_band.round(2).to_string())
 
 # --- Listing 04.26 -----------------------------------
+raw = "data/raw/uk_rmbs/"
+rrel = pd.read_csv(raw + "THAMESBRIDGE_RRE_RREL_2019-12-31.csv",
+                   dtype=str)
+print(rrel.shape)
+print(rrel[["RREL3", "RREL23", "RREL30", "RREL35",
+            "RREL69"]].head(3))
+
+# --- Listing 04.27 -----------------------------------
+dic = "data/raw/data_dictionary.xlsx"
+fields = pd.read_excel(dic, sheet_name="RREL")
+pick = fields["Field Code"].isin(["RREL30", "RREL35", "RREL69"])
+print(fields.loc[pick, ["Field Code", "Field Name", "Format"]])
+
+# --- Listing 04.28 -----------------------------------
+codes = pd.read_excel(dic, sheet_name="Code Lists")
+rrel35 = codes[codes["Field Code"] == "RREL35"]
+print(rrel35[["Code", "Model Value"]].to_string(index=False))
+
+# --- Listing 04.29 -----------------------------------
+nd = rrel.isin(["ND1", "ND2", "ND3", "ND4", "ND5"]).sum()
+print(nd[nd > 0].head(6))
+
+# --- Listing 04.30 -----------------------------------
+income_gbp = pd.to_numeric(rrel["RREL16"].where(
+    ~rrel["RREL16"].isin(["ND1", "ND2", "ND3", "ND4", "ND5"])))
+print(income_gbp.isna().sum(), round(income_gbp.median()))
+
+# --- Listing 04.31 -----------------------------------
+rrec_file = raw + "THAMESBRIDGE_RRE_RREC_2019-12-31.csv"
+rrec = pd.read_csv(rrec_file, dtype=str)
+joined = rrel.merge(rrec, left_on="RREL3", right_on="RREC2",
+                    how="left", validate="one_to_one")
+rrec7 = codes[codes["Field Code"] == "RREC7"]
+occ_map = dict(zip(rrec7["Code"], rrec7["Model Value"]))
+print(joined["RREC7"].map(occ_map).value_counts())
+
+# --- Listing 04.32 -----------------------------------
+path = (raw + "servicer_monthly/"
+        "Thamesbridge_servicer_report_2024-12.xlsx")
+print(pd.read_excel(path, header=None, nrows=3))
+report = pd.read_excel(path, skiprows=4)
+print(report.groupby(["Account Status", "Months in Arrears"],
+                     dropna=False).size())
+
+# --- Listing 04.33 -----------------------------------
+eco = "data/raw/economic/"
+ons = pd.read_csv(eco + "ONS_MGSX_unemployment_rate.csv",
+                  header=None, names=["label", "value"])
+print(ons["label"].head(10).to_string())
+ons_months = ons[ons["label"].str.match(r"^\d{4} [A-Z]{3}$")]
+print(len(ons_months))
+
+# --- Listing 04.34 -----------------------------------
+prepared = pd.read_csv("data/rmbs_loans.csv")
+print(prepared.loc[0, ["loan_id", "repayment_type",
+                      "occupancy", "region"]])
+print(rrel.loc[0, ["RREL3", "RREL35", "RREL11"]])
+
+# --- Listing 04.35 -----------------------------------
 total = loans["current_balance"].sum()
 pool = {
     "Number of loans": len(loans),
@@ -196,7 +255,7 @@ for col, value in [("repayment_type", "Interest-only"),
     pool[f"{value} (% bal)"] = 100 * share
 print(pd.Series(pool).round(2).to_string())
 
-# --- Listing 04.27 -----------------------------------
+# --- Listing 04.36 -----------------------------------
 def stratify(df, column, edges=None, labels=None):
     data = df.copy()
     key = column
@@ -214,25 +273,25 @@ def stratify(df, column, edges=None, labels=None):
                                     include_groups=False)
     return table.round(2)
 
-# --- Listing 04.28 -----------------------------------
+# --- Listing 04.37 -----------------------------------
 rate_edges = [0, 1.0, 1.5, 2.0, 2.5, 4.0]
 rate_labels = ["<=1.0", "1.0-1.5", "1.5-2.0", "2.0-2.5", ">2.5"]
 print(stratify(loans, "interest_rate", rate_edges,
                rate_labels))
 
-# --- Listing 04.29 -----------------------------------
+# --- Listing 04.38 -----------------------------------
 by_region = stratify(loans, "region")
 print(by_region.sort_values("pct_bal", ascending=False)
       .head(6))
 
-# --- Listing 04.30 -----------------------------------
+# --- Listing 04.39 -----------------------------------
 for name, table in [("rate", stratify(loans, "interest_rate",
                                       rate_edges, rate_labels)),
                     ("region", by_region)]:
     print(name, table["loans"].sum(),
           round(table["balance_m"].sum(), 1))
 
-# --- Listing 04.31 -----------------------------------
+# --- Listing 04.40 -----------------------------------
 pack = {"ltv": stratify(loans, "current_ltv", edges, labels),
         "rate": stratify(loans, "interest_rate", rate_edges,
                          rate_labels),
@@ -241,18 +300,18 @@ for name, table in pack.items():
     table.to_csv(f"outputs/ch04_strat_{name}.csv")
 print(sorted(pack))
 
-# --- Listing 04.32 -----------------------------------
+# --- Listing 04.41 -----------------------------------
 sub = pd.DataFrame({"bal": [200000, 50000, 150000, 100000],
                     "rate": [2.0, 3.0, 1.5, 2.5]})
 print(sub["rate"].mean(),
       np.average(sub["rate"], weights=sub["bal"]))
 
-# --- Listing 04.33 -----------------------------------
+# --- Listing 04.42 -----------------------------------
 x = pd.Series([60.0, 60.01, 80.0, 0.0, 100.0])
 print(pd.cut(x, [0, 60, 80, 100],
              labels=["0-60", "60-80", "80-100"]).tolist())
 
-# --- Listing 04.34 -----------------------------------
+# --- Listing 04.43 -----------------------------------
 reg = tape.groupby("region").agg(
     loans=("loan_id", "count"),
     defaults=("defaulted", "sum"),
@@ -263,7 +322,7 @@ reg["loss_k"] = reg["loss_k"] / 1000
 print(reg.sort_values("rate_pct", ascending=False)
       .head(5).round(2))
 
-# --- Listing 04.35 -----------------------------------
+# --- Listing 04.44 -----------------------------------
 perf = pd.read_csv("data/rmbs_performance.csv.gz")
 perf["arrears"] = perf["status"].isin(["30", "60", "90"])
 dec = perf[perf["period"] == "2021-12"]
@@ -273,7 +332,7 @@ by_bal = (dec.loc[dec["arrears"], "opening_balance"].sum()
 print(f"Dec 2021: {by_count:.3%} by count, "
       f"{by_bal:.3%} by balance")
 
-# --- Listing 04.36 -----------------------------------
+# --- Listing 04.45 -----------------------------------
 perf["arrears_bal"] = (perf["opening_balance"]
                        * perf["arrears"])
 monthly = perf.groupby("period")[["arrears_bal",
@@ -281,7 +340,7 @@ monthly = perf.groupby("period")[["arrears_bal",
 share = monthly["arrears_bal"] / monthly["opening_balance"]
 print(share.idxmax(), f"{share.max():.3%}")
 
-# --- Listing 04.37 -----------------------------------
+# --- Listing 04.46 -----------------------------------
 lti_edges = [0, 3.0, 3.5, 4.0, 5.0]
 lti_labels = ["<=3.0", "3.0-3.5", "3.5-4.0", ">4.0"]
 lti = stratify(tape, "loan_to_income", lti_edges, lti_labels)
@@ -291,13 +350,13 @@ lti["def_pct"] = (100 * tape.groupby("lti_band", observed=True)
                   ["defaulted"].mean()).round(2)
 print(lti[["pct_bal", "wa_ltv", "def_pct"]])
 
-# --- Listing 04.38 -----------------------------------
+# --- Listing 04.47 -----------------------------------
 cross = tape.pivot_table(index="ltv_band", columns="lti_band",
                          values="defaulted", aggfunc="mean",
                          observed=True)
 print((100 * cross).round(1))
 
-# --- Listing 04.39 -----------------------------------
+# --- Listing 04.48 -----------------------------------
 # (not executed in the book)
 # import json
 # import os
@@ -324,7 +383,7 @@ print((100 * cross).round(1))
 #     and loss."""
 #     return pd.read_csv(_path("rmbs_defaults.csv"))
 
-# --- Listing 04.40 -----------------------------------
+# --- Listing 04.49 -----------------------------------
 from sfrating import data
 check = data.load_loans()
 pool_m = check["current_balance"].sum() / 1e6

@@ -16,3 +16,7 @@ outputs/*
 # OS
 .DS_Store
 Thumbs.db
+# Model tables built by scripts/prepare_data.py from data/raw/
+data/*.csv
+data/*.csv.gz
+data/*.json

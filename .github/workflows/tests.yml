@@ -23,6 +23,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -e capstone
+      - name: Prepare the model tables from the raw files
+        run: python scripts/prepare_data.py
       - name: Run the unit tests
         run: python -m pytest capstone/tests -q
       - name: Run the rating model end to end

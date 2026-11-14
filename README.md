@@ -9,10 +9,12 @@ the default and loss models used to rate RMBS, CMBS, ABS and CLO tranches, one i
 ## What is here
 
 ```
-data/                   every dataset used in the book (synthetic, seeded)
+data/raw/               input files in real-world formats (synthetic, seeded)
+data/                   model tables built by scripts/prepare_data.py
   README_DATA.md        what every file and column means
 scripts/
-  generate_data.py      the program that creates the data (seed 2026)
+  generate_data.py      the program that creates the raw files (seed 2026)
+  prepare_data.py       raw files -> model tables (Chapter 4)
 chapters/
   ch00/ … ch24/         every code listing of each chapter, in the order of the book
 sql/
@@ -55,16 +57,19 @@ transaction (Thamesbridge Mortgages No. 1 plc) are fictional. Rating levels, str
 default tables are illustrative teaching values; they are not the criteria of any credit
 rating agency and must not be used to rate, buy or sell any security.
 
-`data/README_DATA.md` describes every file and column, and ends with how to open the files
-in Excel (the performance file is gzip-compressed and must be unzipped first).
+The input files in `data/raw/` are in the formats of real work: the UK loan-level
+templates (field codes RREL, RREC, AUTL), monthly servicer reports, an investor report,
+a trustee report and the layouts of the Bank of England, ONS and HM Land Registry
+downloads. `data/raw/data_dictionary.xlsx` documents every field and code.
 
-To regenerate the data exactly:
+Build the model tables once after cloning:
 
 ```bash
-python scripts/generate_data.py
+python scripts/prepare_data.py
 ```
 
-The files come out byte for byte identical to the ones in the repository.
+`data/README_DATA.md` describes the raw files, the preparation step and every column of
+the model tables, and ends with how to open the files in Excel.
 
 ## The capstone package `sfrating`
 
