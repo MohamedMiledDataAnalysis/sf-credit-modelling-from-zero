@@ -57,25 +57,37 @@ CREATE NONCLUSTERED INDEX ix_perf_period_status
     INCLUDE (closing_balance);
 GO
 
--- ---- Block 5 --------------------------------------------------
+-- ---- Block 5 (full ten-column version of the book's shortened load) --------------------------------------------------
 BEGIN TRY
   BEGIN TRANSACTION;
-  CREATE TABLE #stage (loan_id VARCHAR(10), period CHAR(7),
-                       status VARCHAR(3),
-                       closing_balance DECIMAL(12,2));
+  -- Staging table with the same ten columns as dbo.performance
+  CREATE TABLE #stage (
+    loan_id VARCHAR(10), period CHAR(7), status VARCHAR(3),
+    opening_balance DECIMAL(12,2), scheduled_payment DECIMAL(12,2),
+    principal_paid DECIMAL(12,2), interest_due DECIMAL(12,2),
+    prepayment DECIMAL(12,2), default_balance DECIMAL(12,2),
+    closing_balance DECIMAL(12,2));
   BULK INSERT #stage FROM 'C:\sfcm\data\2025-01.csv'
-       WITH (FORMAT = 'CSV', FIRSTROW = 2,
-             ROWTERMINATOR = '0x0a');
+       WITH (FORMAT = 'CSV', FIRSTROW = 2, ROWTERMINATOR = '0x0a');
   MERGE dbo.performance AS t
   USING #stage AS s
      ON t.loan_id = s.loan_id AND t.period = s.period
-  WHEN MATCHED THEN UPDATE
-       SET t.status = s.status,
-           t.closing_balance = s.closing_balance
+  WHEN MATCHED THEN UPDATE SET
+       t.status = s.status,
+       t.opening_balance = s.opening_balance,
+       t.scheduled_payment = s.scheduled_payment,
+       t.principal_paid = s.principal_paid,
+       t.interest_due = s.interest_due,
+       t.prepayment = s.prepayment,
+       t.default_balance = s.default_balance,
+       t.closing_balance = s.closing_balance
   WHEN NOT MATCHED THEN INSERT
-       (loan_id, period, status, closing_balance)
-       VALUES (s.loan_id, s.period, s.status,
-               s.closing_balance);
+       (loan_id, period, status, opening_balance, scheduled_payment,
+        principal_paid, interest_due, prepayment, default_balance,
+        closing_balance)
+       VALUES (s.loan_id, s.period, s.status, s.opening_balance,
+               s.scheduled_payment, s.principal_paid, s.interest_due,
+               s.prepayment, s.default_balance, s.closing_balance);
   COMMIT TRANSACTION;
 END TRY
 BEGIN CATCH
