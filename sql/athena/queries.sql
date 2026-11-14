@@ -27,7 +27,7 @@ WHERE status NOT IN ('DEF', 'PRE')
 GROUP BY period
 ORDER BY period;
 
--- 3. Monthly roll rate from current to 30, averaged by year (Chapter 11)
+-- 3. Monthly roll rate from current to 30, pooled by year (Chapter 11)
 WITH moves AS (
   SELECT period, status,
          LAG(status) OVER (PARTITION BY loan_id

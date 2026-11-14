@@ -10,9 +10,9 @@ CREATE DATABASE IF NOT EXISTS thamesbridge;
 CREATE EXTERNAL TABLE IF NOT EXISTS thamesbridge.loans (
   loan_id               STRING,
   origination_date      DATE,
-  original_balance      DOUBLE,
-  current_balance       DOUBLE,
-  property_value        DOUBLE,
+  original_balance      DECIMAL(12,2),
+  current_balance       DECIMAL(12,2),
+  property_value        DECIMAL(12,2),
   original_ltv          DOUBLE,
   current_ltv           DOUBLE,
   interest_rate         DOUBLE,
@@ -26,7 +26,7 @@ CREATE EXTERNAL TABLE IF NOT EXISTS thamesbridge.loans (
   property_type         STRING,
   region                STRING,
   employment            STRING,
-  income                DOUBLE,
+  income                DECIMAL(12,2),
   loan_to_income        DOUBLE,
   credit_score          INT
 )
@@ -38,13 +38,13 @@ CREATE EXTERNAL TABLE IF NOT EXISTS thamesbridge.performance (
   loan_id           STRING,
   period            STRING,
   status            STRING,
-  opening_balance   DOUBLE,
-  scheduled_payment DOUBLE,
-  principal_paid    DOUBLE,
-  interest_due      DOUBLE,
-  prepayment        DOUBLE,
-  default_balance   DOUBLE,
-  closing_balance   DOUBLE
+  opening_balance   DECIMAL(12,2),
+  scheduled_payment DECIMAL(12,2),
+  principal_paid    DECIMAL(12,2),
+  interest_due      DECIMAL(12,2),
+  prepayment        DECIMAL(12,2),
+  default_balance   DECIMAL(12,2),
+  closing_balance   DECIMAL(12,2)
 )
 ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
 LOCATION 's3://my-sf-rating-data/athena/performance/'

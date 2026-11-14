@@ -106,7 +106,8 @@ print(f"Difference: £{cash_in - cash_out:,.6f}")
 # def parse_args(argv=None):
 #     p = argparse.ArgumentParser(
 #         description="Thamesbridge rating model")
-#     p.add_argument("--data-dir", default="data")
+#     p.add_argument("--data-dir",
+#                    default=os.environ.get("SFCM_DATA", "data"))
 #     p.add_argument("--output-dir", default="outputs")
 #     p.add_argument("--sonia", type=float, default=3.0)
 #     p.add_argument("--cprs", type=float, nargs="+",
@@ -282,7 +283,7 @@ print(pd.read_sql(having_sql, con).to_string(index=False))
 con.execute("PRAGMA foreign_keys = ON")
 con.executescript("""
 CREATE TABLE loan_k (
-  loan_id      TEXT PRIMARY KEY,
+  loan_id      TEXT NOT NULL PRIMARY KEY,
   current_ltv  REAL NOT NULL
                CHECK (current_ltv BETWEEN 0 AND 200)
 );
@@ -325,8 +326,8 @@ print(pd.read_sql("SELECT * FROM loan_k", con)
 
 # --- Listing 22.22 -----------------------------------
 con.executescript("""
-ALTER TABLE loan_k ADD COLUMN arrears_flag INTEGER DEFAULT 0;
-UPDATE loan_k SET arrears_flag = 1 WHERE current_ltv > 80;
+ALTER TABLE loan_k ADD COLUMN high_ltv INTEGER DEFAULT 0;
+UPDATE loan_k SET high_ltv = 1 WHERE current_ltv > 80;
 """)
 print(pd.read_sql("SELECT * FROM loan_k", con)
       .to_string(index=False))
@@ -361,16 +362,18 @@ print(pd.read_sql(orphan_sql, con).to_string(index=False))
 
 # --- Listing 22.25 -----------------------------------
 full_sql = """
-SELECT CASE WHEN d.loan_id IS NULL THEN 'only in Jan 2024'
-            WHEN j.loan_id IS NULL THEN 'only in Dec 2023'
-            ELSE 'in both' END AS reconciliation,
-       COUNT(*) AS loans
-FROM (SELECT loan_id FROM dbo.performance
-      WHERE period = '2023-12') AS d
-FULL OUTER JOIN
-     (SELECT loan_id FROM dbo.performance
-      WHERE period = '2024-01') AS j
-  ON j.loan_id = d.loan_id
+SELECT reconciliation, COUNT(*) AS loans
+FROM (SELECT CASE WHEN d.loan_id IS NULL
+                  THEN 'only in Jan 2024'
+                  WHEN j.loan_id IS NULL
+                  THEN 'only in Dec 2023'
+                  ELSE 'in both' END AS reconciliation
+      FROM (SELECT loan_id FROM dbo.performance
+            WHERE period = '2023-12') AS d
+      FULL OUTER JOIN
+           (SELECT loan_id FROM dbo.performance
+            WHERE period = '2024-01') AS j
+        ON j.loan_id = d.loan_id) AS r
 GROUP BY reconciliation
 """
 print(pd.read_sql(full_sql, con).to_string(index=False))
@@ -434,8 +437,8 @@ print(pd.read_sql(running_sql, con).to_string(index=False))
 
 # --- Listing 22.30 -----------------------------------
 con.executescript("""
-DROP VIEW IF EXISTS v_snapshot;
-CREATE TEMP VIEW v_snapshot AS
+DROP VIEW IF EXISTS dbo.v_snapshot;
+CREATE VIEW dbo.v_snapshot AS
 WITH ranked AS (
   SELECT p.*, ROW_NUMBER() OVER (PARTITION BY loan_id
                                  ORDER BY period DESC) AS rn
@@ -446,7 +449,7 @@ FROM ranked WHERE rn = 1;
 live_sql = """
 SELECT COUNT(*) AS live_loans,
        ROUND(SUM(closing_balance) / 1e6, 1) AS balance_m
-FROM v_snapshot
+FROM dbo.v_snapshot
 WHERE status NOT IN ('DEF', 'PRE')
 """
 print(pd.read_sql(live_sql, con).to_string(index=False))
@@ -468,7 +471,7 @@ dq_sql = """
 SELECT
  (SELECT COUNT(*) FROM (SELECT loan_id, period
     FROM dbo.performance GROUP BY loan_id, period
-    HAVING COUNT(*) > 1)) AS duplicate_keys,
+    HAVING COUNT(*) > 1) AS k) AS duplicate_keys,
  (SELECT COUNT(*) FROM dbo.performance AS p
     LEFT JOIN dbo.loans AS l ON l.loan_id = p.loan_id
     WHERE l.loan_id IS NULL) AS orphan_rows,

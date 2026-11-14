@@ -114,7 +114,7 @@ them, with four points to know.
   From the repository root, on any system:
   `python -c "import pandas as pd; pd.read_csv('data/rmbs_performance.csv.gz').to_csv('outputs/rmbs_performance.csv', index=False)"`.
   Without Python: copy the `.gz` file into `outputs/`, then double-click the copy in Finder
-  (macOS) or open it with 7-Zip and choose *Extract here* (Windows). The unzipped file is
+  (macOS) or open it with 7-Zip and choose *7-Zip → Extract Here* (Windows). The unzipped file is
   29.8 MB with 449,053 lines (header included), below Excel's limit of 1,048,576 rows.
   Keep the `.gz` file in `data/`: the code reads it.
 * **Months become dates.** Excel turns `period` and `default_period` (`2020-01`) into the

@@ -42,7 +42,8 @@ python chapters/ch11/listings.py         # run one chapter's listings
 python -m pytest capstone/tests          # run the tests
 ```
 
-Python 3.12 or later is recommended (3.11 is the minimum tested). If PowerShell refuses to run
+Python 3.12 or later is required (`capstone/pyproject.toml` declares
+`requires-python = ">=3.12"`; GitHub Actions tests 3.12 and 3.13). If PowerShell refuses to run
 `Activate.ps1`, run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once.
 
 Run every script from the repository root, so that the paths `data/…` and `figures/…` resolve.

@@ -28,8 +28,9 @@ log = logging.getLogger("run_rating")
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Thamesbridge rating model")
-    p.add_argument("--data-dir", default="data",
-                   help="folder holding the CSV and JSON files")
+    p.add_argument("--data-dir", default=str(data.DATA_DIR),
+                   help="folder holding the CSV and JSON files "
+                        "(default: $SFCM_DATA, else data)")
     p.add_argument("--output-dir", default="outputs",
                    help="folder for the results and the report")
     p.add_argument("--sonia", type=float, default=3.0,
