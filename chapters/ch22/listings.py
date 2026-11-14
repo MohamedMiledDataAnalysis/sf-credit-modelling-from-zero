@@ -574,9 +574,9 @@ def run_fingerprint(data_dir="data"):
           "python": platform.python_version(),
           "pandas": pd.__version__,
           "numpy": np.__version__}
-    for f in sorted(Path(data_dir).glob("*.*")):
+    for f in sorted(Path(data_dir).rglob("*.*")):
         digest = hashlib.sha256(f.read_bytes()).hexdigest()
-        fp[f.name] = digest[:16]
+        fp[f.relative_to(data_dir).as_posix()] = digest[:16]
     return fp
 
 fp = run_fingerprint()

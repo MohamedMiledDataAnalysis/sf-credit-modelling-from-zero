@@ -242,7 +242,7 @@ IVSS33|Obligor Probability Of Default in Range [0.25%,1.00%)|{PERCENTAGE}
 IVSS34|Obligor Probability Of Default in Range [1.00%,7.50%)|{PERCENTAGE}
 IVSS35|Obligor Probability Of Default in Range [7.50%,20.00%)|{PERCENTAGE}
 IVSS36|Obligor Probability Of Default in Range [20.00%,100.00%]|{PERCENTAGE}
-IVSS37|Bank Internal Loss Given Default Estimate|{PERCENTAGE}
+IVSS37|Internal Loss Given Default Estimate|{PERCENTAGE}
 IVSS38|Arrears 1-29 Days|{PERCENTAGE}
 IVSS39|Arrears 30-59 Days|{PERCENTAGE}
 IVSS40|Arrears 60-89 Days|{PERCENTAGE}
@@ -343,7 +343,8 @@ CODE_LISTS = [
     ("AUTL70", "PERF", "Performing", "censored"),
     ("AUTL70", "ARRE", "Arrears", "censored"),
     ("AUTL70", "DFLT", "Defaulted according to Article 178 of Regulation (EU) No 575/2013", "default"),
-    ("AUTL70", "RDMD", "Redeemed", "prepaid"),
+    ("AUTL70", "RDMD", "Redeemed (censored if AUTL51 is ND5: repaid "
+                       "at maturity)", "prepaid"),
     ("IVSS8", "VSLC", "Vertical slice - Article 6(3)(a)", ""),
     ("IVSS9", "ORIG", "Originator", ""),
     ("IVSS10", "RMRT", "Residential Mortgage", ""),

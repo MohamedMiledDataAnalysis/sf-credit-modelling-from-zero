@@ -281,7 +281,7 @@ def stratify(df, column, edges=None, labels=None):
     table = grouped.agg(loans=("loan_id", "count"),
                         balance_m=("balance_m", "sum"))
     table["pct_bal"] = 100 * table["balance_m"] / (
-        table["balance_m"].sum())
+        data["balance_m"].sum())
     for c, name in [("current_ltv", "wa_ltv"),
                     ("interest_rate", "wa_rate")]:
         table[name] = grouped.apply(wa, c,

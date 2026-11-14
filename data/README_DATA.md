@@ -21,8 +21,8 @@ only data files stored in the repository.
 | | `ONS_MGSX_unemployment_rate.csv` | ONS time-series download (8 metadata rows) |
 | | `UK-HPI-full-file-2024-12.csv` | HM Land Registry UK House Price Index full file (first ten columns) |
 | | `internal_credit_cycle_index.csv` | internal model input |
-| `uk_auto/` | `WESSEX_AUTO_2024-12-31.zip` + additional data | FCA underlying exposure report, zipped XML, automobile: AUTL1–AUTL84 |
-| `cmbs/` | `CMBS_servicer_loan_history_2024-12.xlsx` | special servicer loan history report |
+| `uk_auto/` | `WESSEX_AUTO_2024-12-31.zip` + additional data | FCA underlying exposure report, zipped XML, automobile: AUTL1–AUTL84; a revolving pool (closing 30 June 2023, later loans added in the month they are made) |
+| `cmbs/` | `CMBS_servicer_loan_history_2024-12.xlsx` | servicer loan history report |
 | `clo/` | `CLO_trustee_report_2024-12.xlsx` | trustee report, collateral portfolio |
 | `assumptions/` | `rating_assumptions.xlsx` | rating criteria tables (default table by rating and year, stresses) |
 
@@ -49,7 +49,7 @@ are synthetic and the ONS file says so in its title row.
 python scripts/prepare_data.py
 ```
 
-Run it once after cloning (it takes about two minutes). It reads the XML reports, applies the FCA validation rules, decodes the template codes with
+Run it once after cloning (it prints nothing for a few minutes, then one summary line). It reads the XML reports, applies the FCA validation rules, decodes the template codes with
 the data dictionary, checks formats and no-data codes, joins the loan and collateral sections,
 stacks the 60 servicer reports, reconciles the last report with the investor report and
 writes the tables below. These tables are not stored in the repository, because they are
@@ -184,7 +184,7 @@ them, with four points to know.
 * **Never save over the originals.** Saving from Excel rewrites dates in your regional format
   and drops trailing zeros (`14900.0` becomes `14900`), so the files no longer match the book's
   hashes and `2020-01` may no longer parse. Use *File → Save As* under a new name outside `data/`,
-  or restore a file with `git checkout -- data/FILE`.
+  or rebuild every model table with `python scripts/prepare_data.py`.
 
 Nothing else is lost: identifiers are text with a letter prefix (`TB000001`, `AU00001`,
 `CM0001`, `Obligor 001`), so no leading zeros disappear; no number has more than 10 significant

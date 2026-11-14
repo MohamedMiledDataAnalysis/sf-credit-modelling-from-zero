@@ -233,6 +233,9 @@ def prepare_auto(lists) -> pd.DataFrame:
     a = a.merge(extra, left_on="AUTL3", right_on="Agreement Number",
                 how="left", validate="one_to_one")
     outcome = decode(a["AUTL70"], "AUTL70", lists)
+    # redeemed without a prepayment date: repaid at maturity, censored
+    at_maturity = (a["AUTL70"] == "RDMD") & a["AUTL51"].isin(ND)
+    outcome = outcome.where(~at_maturity, "censored")
     end = a["AUTL6"].where(outcome == "censored",
                            a["AUTL73"].where(outcome == "default",
                                              a["AUTL51"]))

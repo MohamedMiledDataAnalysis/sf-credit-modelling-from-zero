@@ -58,6 +58,7 @@ CREATE NONCLUSTERED INDEX ix_perf_period_status
 GO
 
 -- ---- Block 5 (full ten-column version of the book's shortened load) --------------------------------------------------
+DROP TABLE IF EXISTS #stage;   -- lets you run the block twice in a session
 BEGIN TRY
   BEGIN TRANSACTION;
   -- Staging table with the same ten columns as dbo.performance

@@ -40,6 +40,7 @@ python -m venv .venv                     # macOS / Linux: python3 -m venv .venv
 source .venv/bin/activate                # macOS / Linux
 python -m pip install -r requirements.txt
 python -m pip install -e capstone
+python scripts/prepare_data.py           # build the model tables in data/
 python chapters/ch11/listings.py         # run one chapter's listings
 python -m pytest capstone/tests          # run the tests
 ```

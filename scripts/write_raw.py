@@ -9,30 +9,60 @@ dictionary. scripts/prepare_data.py turns them into the model tables.
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import io
+import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.cell import WriteOnlyCell
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 import fca_xml
 import templates as T
 
-LEI = "FICTTHAMESBRIDGE0001"          # fictional, 20 characters
-AUTO_LEI = "FICTWESSEXMOTOR00001"
+# Fictional LEIs: 18 characters and two ISO 17442 check digits
+# (MOD 97-10), so they pass the format rule but not a GLEIF look-up.
+LEI = "FICTTHAMESBRIDGE0015"
+AUTO_LEI = "FICTWESSEXMOTOR00061"
 UID_RMBS = LEI + "N" + "2020" + "01"   # LEI + N + year + sequence
 UID_AUTO = AUTO_LEI + "N" + "2023" + "01"
 NAVY = "1F2A44"
+ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+MONEY = "#,##0.00"      # Excel display format of amounts
+DATE = "yyyy-mm-dd"
+
+
+def _date(text: str) -> dt.date:
+    return dt.date.fromisoformat(text)
 
 
 def _title_block(ws, lines):
     for i, line in enumerate(lines, 1):
-        ws.append(line)
+        ws.append([_date(v) if isinstance(v, str) and ISO.match(v) else v
+                   for v in line])
         if i == 1:
             ws.cell(1, 1).font = Font(bold=True, size=13)
+        for c in ws[ws.max_row]:
+            if isinstance(c.value, dt.date):
+                c.number_format = DATE
     ws.append([])
+
+
+def _widths(ws, columns, sample=None, extra=2, cap=45):
+    """Column widths that show the header and the values in full."""
+    for j, name in enumerate(columns, 1):
+        w = len(str(name))
+        if sample is not None:
+            w = max([w] + [len(f"{v:,.2f}") if isinstance(v, float)
+                           else len(str(v)) for v in sample.iloc[:, j - 1]])
+        ws.column_dimensions[get_column_letter(j)].width = min(w + extra,
+                                                               cap)
 
 
 def _header(ws, row_idx, ncols):
@@ -42,8 +72,11 @@ def _header(ws, row_idx, ncols):
         cell.fill = PatternFill("solid", fgColor=NAVY)
 
 
-def _report(path, title_lines, df, sheet="Report"):
-    """An Excel report: title block, blank row, table."""
+def _report(path, title_lines, df, sheet="Report", money=(), dates=()):
+    """An Excel report: title block, blank row, table.
+
+    Columns in `money` display as amounts (1,234.56), columns in
+    `dates` hold Excel dates (text YYYY-MM-DD in df)."""
     wb = Workbook()
     ws = wb.active
     ws.title = sheet
@@ -51,9 +84,17 @@ def _report(path, title_lines, df, sheet="Report"):
     ws.append(list(df.columns))
     hdr = len(title_lines) + 2
     _header(ws, hdr, df.shape[1])
+    pos = {c: j for j, c in enumerate(df.columns)}
     for row in df.itertuples(index=False):
-        ws.append([None if (isinstance(v, float) and np.isnan(v)) else v
-                   for v in row])
+        ws.append([None if (isinstance(v, float) and np.isnan(v))
+                   else _date(v) if df.columns[j] in dates else v
+                   for j, v in enumerate(row)])
+    for col, fmt in [(c, MONEY) for c in money] + [(c, DATE)
+                                                    for c in dates]:
+        for (cell,) in ws.iter_rows(min_row=hdr + 1, min_col=pos[col] + 1,
+                                    max_col=pos[col] + 1):
+            cell.number_format = fmt
+    _widths(ws, df.columns, df.head(200))
     ws.freeze_panes = ws.cell(hdr + 1, 1)
     wb.save(path)
 
@@ -172,20 +213,36 @@ def servicer_tapes(perf: pd.DataFrame, out: Path) -> None:
             "Scheduled Principal Received", "Interest Due",
             "Redemption Amount", "Balance Transferred to Default",
             "Closing Balance"]
+    widths = [12, 14, 15, 10] + [16] * 7
+
+    def cell(ws, value, fmt=None, header=False):
+        c = WriteOnlyCell(ws, value=value)
+        if fmt:
+            c.number_format = fmt
+        if header:
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor=NAVY)
+        return c
+
     for period, g in perf.groupby("period", sort=True):
         wb = Workbook(write_only=True)
         ws = wb.create_sheet("Loan Level")
-        ws.append(["Thamesbridge Mortgages No. 1 plc"])
+        ws.freeze_panes = "A6"
+        for j, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(j)].width = w
+        date = _date(_month_end(period))
+        ws.append([cell(ws, "Thamesbridge Mortgages No. 1 plc")])
         ws.append(["Monthly loan-level servicer report"])
-        ws.append(["Reporting date", _month_end(period)])
+        ws.append(["Reporting date", cell(ws, date, DATE)])
         ws.append([])
-        ws.append(cols)
-        date = _month_end(period)
+        ws.append([cell(ws, c, header=True) for c in cols])
         for r in g.itertuples(index=False):
             st, months = STATUS_TO_TAPE[r.status]
-            ws.append([r.loan_id, date, st, months, r.opening_balance,
-                       r.scheduled_payment, r.principal_paid, r.interest_due,
-                       r.prepayment, r.default_balance, r.closing_balance])
+            ws.append([r.loan_id, cell(ws, date, DATE), st, months]
+                      + [cell(ws, v, MONEY) for v in
+                         (r.opening_balance, r.scheduled_payment,
+                          r.principal_paid, r.interest_due, r.prepayment,
+                          r.default_balance, r.closing_balance)])
         wb.save(folder / f"Thamesbridge_servicer_report_{period}.xlsx")
 
 
@@ -195,13 +252,18 @@ def losses_report(defaults: pd.DataFrame, out: Path) -> None:
     d.columns = ["Loan Number", "Default Date", "Months Since Origination",
                  "Balance at Default", "Indexed Valuation at Default",
                  "Indexed LTV at Default (%)", "Months to Sale",
-                 "Forced Sale Discount", "Sale Price", "Sale Costs",
+                 "Forced Sale Discount", "Indexed Valuation at Sale",
+                 "Sale Costs",
                  "Accrued Interest", "Total Exposure at Default",
                  "Net Recovery", "Loss", "Loss Severity"]
     _report(out / "Thamesbridge_losses_and_recoveries_2024-12.xlsx",
             [["Thamesbridge Mortgages No. 1 plc"],
              ["Defaults, possessions and recoveries report"],
-             ["Reporting date", "2024-12-31"]], d, "Losses")
+             ["Reporting date", "2024-12-31"]], d, "Losses",
+            money=["Balance at Default", "Indexed Valuation at Default",
+                   "Indexed Valuation at Sale", "Sale Costs",
+                   "Accrued Interest", "Total Exposure at Default",
+                   "Net Recovery", "Loss"], dates=["Default Date"])
 
 
 def investor_report(perf, defaults, deal, out: Path) -> None:
@@ -221,6 +283,12 @@ def investor_report(perf, defaults, deal, out: Path) -> None:
     princ = (p["principal_paid"] + p["prepayment"]).sum()
     intr = p.loc[p["status"] == "C", "interest_due"].sum()
     cum_def = perf["default_balance"].sum()
+    # IVSS28: defaulted loans still outstanding (property not yet sold)
+    sold = (pd.PeriodIndex(defaults["default_period"], freq="M")
+            + defaults["recovery_lag_months"]) <= pd.Period("2024-12", "M")
+    in_default = defaults.loc[~sold, "balance_at_default"].sum()
+    cum_pct = round(100 * cum_def / deal["pool_balance"], 4)
+    breach = cum_pct >= 3.0
     vals = {
         "IVSS1": UID_RMBS, "IVSS2": "2024-12-31",
         "IVSS3": deal["deal_name"],
@@ -229,15 +297,15 @@ def investor_report(perf, defaults, deal, out: Path) -> None:
         "IVSS6": "+44 20 7946 0000",
         "IVSS7": "investor.reporting@thamesbridge.example",
         "IVSS8": "VSLC", "IVSS9": "ORIG", "IVSS10": "RMRT",
-        "IVSS11": "Y", "IVSS12": "N", "IVSS13": "ND5",
+        "IVSS11": "Y", "IVSS12": "Y" if breach else "N", "IVSS13": "ND5",
         "IVSS14": round(rec, 2), "IVSS15": 0,
         "IVSS16": round(princ, 2), "IVSS17": round(intr, 2),
-        "IVSS18": "N", "IVSS19": "ND5", "IVSS20": "Y", "IVSS21": "ND5",
+        "IVSS18": "N", "IVSS19": "ND5", "IVSS20": "N", "IVSS21": "ND5",
         "IVSS22": round(100 * (1 - (1 - smm) ** 12), 4),
         "IVSS23": 0, "IVSS24": round(p["default_balance"].sum(), 2),
         "IVSS25": 0, "IVSS26": 0,
         "IVSS27": round(100 * (1 - (1 - mdr) ** 12), 4),
-        "IVSS28": round(cum_def, 2), "IVSS29": "ND5", "IVSS30": "ND5",
+        "IVSS28": round(in_default, 2), "IVSS29": "ND5", "IVSS30": "ND5",
         "IVSS31": "ND5", "IVSS32": "ND5", "IVSS33": "ND5",
         "IVSS34": "ND5", "IVSS35": "ND5", "IVSS36": "ND5",
         "IVSS37": "ND5", "IVSS38": 0, "IVSS39": bucket("30"),
@@ -255,14 +323,18 @@ def investor_report(perf, defaults, deal, out: Path) -> None:
     _header(ws, 5, 4)
     for r in rows:
         ws.append(list(r))
-    cum_pct = round(100 * cum_def / deal["pool_balance"], 4)
+        if r[2] == "{MONETARY}" and not isinstance(r[3], str):
+            ws.cell(ws.max_row, 4).number_format = MONEY
+    for col, w in zip("ABCD", [11, 54, 16, 34]):
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "C6"
     ws2 = wb.create_sheet("IVSR Tests-Triggers")
     ws2.append([c for c, _, _ in T.fields(T.IVSR)])
     ws2.append([n for _, n, _ in T.fields(T.IVSR)])
     ws2.append([UID_RMBS, "TRIG01", "TRIG01",
                 "Cumulative defaults as a percentage of the pool balance "
-                "at closing", 3.0, cum_pct, "Y" if cum_pct < 3 else "N",
-                0, 1, "OTHR"])
+                "at closing", 3.0, cum_pct, "Y" if breach else "N",
+                0, 30, "OTHR"])    # IVSR7 Y = breached; IVSR9 in days
     ws3 = wb.create_sheet("IVSF Cash Flows")
     ws3.append([c for c, _, _ in T.fields(T.IVSF)])
     ws3.append([n for _, n, _ in T.fields(T.IVSF)])
@@ -270,6 +342,20 @@ def investor_report(perf, defaults, deal, out: Path) -> None:
                 round(intr, 2), round(intr, 2)])
     ws3.append([UID_RMBS, "CF02", "CF02", "Principal collections",
                 round(princ, 2), round(intr + princ, 2)])
+    for sh in (ws2, ws3):            # code row, then name row
+        _header(sh, 1, sh.max_column)
+        _header(sh, 2, sh.max_column)
+        _widths(sh, [max((str(c.value) for c in col[:2]), key=len)
+                     for col in sh.iter_cols()], cap=30)
+        sh.freeze_panes = "A3"
+        for c in sh[3]:
+            if isinstance(c.value, float):
+                c.number_format = MONEY if sh is ws3 else "General"
+        for c in sh[4] if sh.max_row >= 4 else []:
+            if isinstance(c.value, float):
+                c.number_format = MONEY
+    for c in ws2[3]:
+        c.alignment = Alignment(wrap_text=True, vertical="top")
     wb.save(out / "Thamesbridge_investor_report_2024-12.xlsx")
 
 
@@ -282,6 +368,11 @@ def deal_summary(deal: dict, out: Path) -> None:
     for k, v in deal.items():
         if k != "tranches":
             ws.append([k, v])
+            if k == "pool_balance":
+                ws.cell(ws.max_row, 2).number_format = MONEY
+    ws.column_dimensions["A"].width = 34
+    ws.column_dimensions["B"].width = 50
+    ws.freeze_panes = "A2"
     ws2 = wb.create_sheet("Notes")
     ws2.append(["Class", "Share of Pool", "Original Balance (GBP)",
                 "Margin over SONIA (%)", "Rating (illustrative)"])
@@ -289,6 +380,9 @@ def deal_summary(deal: dict, out: Path) -> None:
     for t in deal["tranches"]:
         ws2.append([t["class"], t["share_of_pool"], t["balance"],
                     t["margin_pct"], t["target_rating_illustrative"]])
+        ws2.cell(ws2.max_row, 3).number_format = MONEY
+    _widths(ws2, [c.value for c in ws2[1]], extra=3)
+    ws2.freeze_panes = "A2"
     wb.save(out / "Thamesbridge_deal_summary.xlsx")
 
 
@@ -354,11 +448,33 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
     dep = (val - auto["amount_financed"]).round(2)
     pre = auto["outcome"] == "prepaid"
     dft = auto["outcome"] == "default"
-    frac = 1 - auto["months_observed"] / auto["term_months"]
-    def_amt = (auto["amount_financed"] * frac.clip(0.05, 1)).round(2)
-    rec = (def_amt * auto["recovery_rate_if_default"]).round(2)
     status = auto["outcome"].map({"censored": "PERF", "prepaid": "RDMD",
                                   "default": "DFLT"})
+    # a loan that reached its maturity date by the cut-off date is
+    # repaid: redeemed at maturity, with no prepayment date (AUTL51)
+    matured = (status == "PERF") & (pd.Series(mat) <= "2024-12-31")
+    status = status.where(~matured, "RDMD")
+    # French amortisation with a final balloon: on PCP agreements the
+    # balloon is the guaranteed minimum future value of the car
+    r = auto["apr"] / 1200
+    term = auto["term_months"]
+    gmfv_pct = term.map({36: 0.45, 48: 0.40, 60: 0.35})
+    pcp = auto["product"] == "PCP"
+    balloon = np.where(pcp, np.minimum(gmfv_pct * val,
+                                       0.8 * auto["amount_financed"]),
+                       0).round(2)
+    pv_balloon = balloon / (1 + r) ** term
+    pay = ((auto["amount_financed"] - pv_balloon) * r
+           / (1 - (1 + r) ** (-term))).round(2)
+    k = auto["months_observed"]
+    bal_k = (auto["amount_financed"] * (1 + r) ** k
+             - pay * ((1 + r) ** k - 1) / r).round(2)
+    # default amount: the balance outstanding when the loan defaulted
+    def_amt = np.maximum(bal_k, (0.05 * auto["amount_financed"]).round(2))
+    rec = (def_amt * auto["recovery_rate_if_default"]).round(2)
+    orig_year = np.array([int(o[:4]) for o in orig])
+    reg_year = np.where(auto["vehicle"] == "New", orig_year,
+                        orig_year - rng.integers(1, 6, n))
     lender = "Wessex Motor Finance Limited"
     v = {c: nd5 for c, _, _ in T.fields(T.AUTL)}
     v.update({
@@ -366,9 +482,12 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL3": auto["loan_id"],
         "AUTL4": ["CU" + s[2:] for s in auto["loan_id"]],
         "AUTL5": ["CU" + s[2:] for s in auto["loan_id"]],
-        "AUTL6": ["2024-12-31"] * n, "AUTL7": ["2023-06-30"] * n,
-        "AUTL9": np.where(pre, event, "ND5"),
-        "AUTL10": ["ND1"] * n, "AUTL11": [2016] * n,
+        # revolving pool: loans made after closing (30 June 2023) join
+        # it at the end of the month they are made
+        "AUTL6": ["2024-12-31"] * n,
+        "AUTL7": [max("2023-06-30", _month_end(o[:7])) for o in orig],
+        "AUTL9": np.where(pre, event, np.where(matured, mat, "ND5")),
+        "AUTL10": ["ND1"] * n, "AUTL11": ["ND1"] * n,
         "AUTL12": ["ND1"] * n, "AUTL13": ["N"] * n,
         "AUTL14": ["INDV"] * n, "AUTL15": ["ND1"] * n,
         "AUTL16": ["ND1"] * n, "AUTL17": ["ND1"] * n,
@@ -377,24 +496,32 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL24": orig, "AUTL25": mat, "AUTL26": auto["term_months"],
         "AUTL27": ["ND1"] * n, "AUTL28": ["GBP"] * n,
         "AUTL29": auto["amount_financed"],
-        "AUTL30": np.where(status == "PERF",
-                           (auto["amount_financed"] * frac).round(2), 0),
+        "AUTL30": np.where(status == "PERF", bal_k, 0),
         "AUTL31": [100] * n, "AUTL32": ["FRXX"] * n,
         "AUTL34": ["MNTH"] * n, "AUTL35": ["MNTH"] * n,
-        "AUTL36": ["CDTX"] * n, "AUTL39": dep, "AUTL40": auto["apr"],
+        "AUTL36": ["CDTX"] * n,
+        "AUTL37": np.where(status == "PERF", pay, 0),
+        "AUTL38": balloon, "AUTL39": dep, "AUTL40": auto["apr"],
         "AUTL47": [max(0, (pd.Period("2023-06", "M") - p).n)
                    for p in start],
         "AUTL53": ["ND1"] * n, "AUTL54": ["ND1"] * n,
         "AUTL51": np.where(pre, event, "ND5"),
         "AUTL52": np.where(pre, auto["amount_financed"], 0),
+        "AUTL55": reg_year,
         "AUTL56": auto["vehicle"].map({"New": "NEWX", "Used": "USED"}),
         "AUTL59": (100 * auto["amount_financed"] / val).round(2),
-        "AUTL60": val, "AUTL68": [0] * n, "AUTL69": [0] * n,
+        "AUTL60": val,
+        "AUTL61": np.where(pcp, balloon, "ND5"),
+        "AUTL62": np.where(pcp, balloon, "ND5"),
+        "AUTL63": np.where(pcp, balloon, "ND5"),
+        "AUTL68": [0] * n, "AUTL69": [0] * n,
         "AUTL70": status, "AUTL71": np.where(dft, "PDXX", "ND5"),
         "AUTL72": np.where(dft, def_amt, "ND5"),
         "AUTL73": np.where(dft, event, "ND5"),
         "AUTL74": np.where(dft, (def_amt - rec).round(2), 0),
-        "AUTL76": np.where(dft, rec, "ND5"), "AUTL78": dep,
+        # AUTL78 is cash the obligor holds on deposit with the lender
+        # (a set-off risk), not the car deposit, which is AUTL39
+        "AUTL76": np.where(dft, rec, "ND5"), "AUTL78": [0] * n,
         "AUTL79": [lender] * n, "AUTL80": [AUTO_LEI] * n,
         "AUTL81": ["GB"] * n, "AUTL82": [lender] * n,
         "AUTL83": [AUTO_LEI] * n, "AUTL84": ["GB"] * n,
@@ -425,8 +552,9 @@ def cmbs_report(cmbs: pd.DataFrame, out: Path) -> None:
                  "Loss Severity (%)"]
     _report(out / "CMBS_servicer_loan_history_2024-12.xlsx",
             [["UK CMBS loan history - 2010 to 2024 vintages (synthetic)"],
-             ["Special servicer loan-level history report"],
-             ["Reporting date", "2024-12-31"]], d, "Loan History")
+             ["Servicer loan-level history report"],
+             ["Reporting date", "2024-12-31"]], d, "Loan History",
+            money=[c for c in d.columns if c.endswith("(GBP)")])
 
 
 def clo_report(clo: pd.DataFrame, out: Path) -> None:
@@ -444,7 +572,8 @@ def clo_report(clo: pd.DataFrame, out: Path) -> None:
             [["Avon Valley CLO I DAC (fictional)"],
              ["Monthly trustee report - collateral portfolio"],
              ["Determination date", "2024-12-31"]], d,
-            "Collateral Portfolio")
+            "Collateral Portfolio", money=["Par Amount (EUR)"],
+            dates=["Maturity Date"])
 
 
 def assumptions(table: pd.DataFrame, stresses: pd.DataFrame, out: Path):
@@ -462,12 +591,17 @@ def assumptions(table: pd.DataFrame, stresses: pd.DataFrame, out: Path):
     _header(ws, 5, wide.shape[1] + 1)
     for r, row in wide.iterrows():
         ws.append([r] + list(row))
+    _widths(ws, ["Rating"] + list(wide.columns), extra=4)
+    ws.freeze_panes = "B6"
     ws2 = wb.create_sheet("Rating Stresses")
-    ws2.append(["Rating", "Default Multiple", "Market Value Decline (%)",
-                "Prepayment Stress", "Target Loss Quantile", "Note"])
+    head = ["Rating", "Default Multiple", "Market Value Decline (%)",
+            "Prepayment Stress", "Target Loss Quantile", "Note"]
+    ws2.append(head)
     _header(ws2, 1, 6)
     for row in stresses.itertuples(index=False):
         ws2.append(list(row))
+    _widths(ws2, head, stresses)
+    ws2.freeze_panes = "A2"
     wb.save(out / "rating_assumptions.xlsx")
 
 
@@ -508,7 +642,7 @@ def dictionary(out: Path) -> None:
         ("uk_auto/Wessex_originator_additional_data_2024-12-31.xlsx",
          "Additional", "Originator data outside the template", "Cut-off"),
         ("cmbs/CMBS_servicer_loan_history_2024-12.xlsx", "CMBS",
-         "Special servicer loan history", "Annual"),
+         "Servicer loan history", "Annual"),
         ("clo/CLO_trustee_report_2024-12.xlsx", "CLO",
          "Trustee report, collateral portfolio", "Monthly"),
         ("assumptions/rating_assumptions.xlsx", "Assumptions",
@@ -529,6 +663,12 @@ def dictionary(out: Path) -> None:
         "RREL58": "seasoning_months", "RREC7": "occupancy",
         "RREC9": "property_type", "RREC12": "current_ltv",
         "RREC16": "original_ltv", "RREC17": "property_value",
+        "RREL6": "seasoning_months (check)",
+        "AUTL6": "months_observed (end, censored)",
+        "AUTL24": "months_observed (start)",
+        "AUTL51": "months_observed (end, prepaid)",
+        "AUTL73": "months_observed (end, default)",
+        "AUTL60": "deposit_pct (denominator)",
         "AUTL3": "loan_id", "AUTL23": "product", "AUTL26": "term_months",
         "AUTL29": "amount_financed", "AUTL39": "deposit_pct",
         "AUTL40": "apr", "AUTL56": "vehicle", "AUTL70": "outcome",
@@ -560,7 +700,7 @@ def dictionary(out: Path) -> None:
                         "credit_score")],
         "Servicer tape": [
             ("Loan Number", "Text", "loan_id"),
-            ("Reporting Date", "YYYY-MM-DD (month end)", "period"),
+            ("Reporting Date", "Excel date (month end)", "period"),
             ("Account Status", "LIVE / REDEEMED / DEFAULTED", "status"),
             ("Months in Arrears", "Integer 0-3, blank if defaulted",
              "status"),
@@ -571,8 +711,10 @@ def dictionary(out: Path) -> None:
             ("Redemption Amount", "GBP", "prepayment"),
             ("Balance Transferred to Default", "GBP", "default_balance"),
             ("Closing Balance", "GBP", "closing_balance")],
-        "Losses": [("Default Date", "YYYY-MM-DD (month end)",
+        "Losses": [("Default Date", "Excel date (month end)",
                     "default_period"),
+                   ("Indexed Valuation at Sale", "GBP, before the "
+                    "forced-sale discount", "sale_value"),
                    ("Other columns", "GBP, %, months or ratio",
                     "same order as rmbs_defaults.csv")],
         "Deal": [("Transaction sheet", "Item / Value", "rmbs_deal.json"),
@@ -581,7 +723,8 @@ def dictionary(out: Path) -> None:
             ("DATE / IUMASOIA", "DD Mon YYYY / % a year", "sonia"),
             ("ONS rows 'YYYY MON'", "% after 8 metadata rows",
              "unemployment_rate"),
-            ("Index (RegionName = United Kingdom)", "Jan 2015 = 100",
+            ("Index (RegionName = United Kingdom)",
+             "December 2019 = 100 (the real file: January 2015 = 100)",
              "hpi"),
             ("Credit Cycle Index", "Standardised factor",
              "credit_factor")],
@@ -589,7 +732,7 @@ def dictionary(out: Path) -> None:
                   "term_default, maturity_default (1/0)"),
                  ("Loss Severity (%)", "Percentage", "loss_severity "
                   "(fraction)")],
-        "CLO": [("Maturity Date", "YYYY-MM-DD", "years_to_maturity"),
+        "CLO": [("Maturity Date", "Excel date", "years_to_maturity"),
                 ("Recovery Rate Assumption (%)", "Percentage",
                  "recovery_assumption (fraction)"),
                 ("Rating (illustrative)", "Rating scale",
@@ -615,6 +758,12 @@ def dictionary(out: Path) -> None:
         s.append(["NUTS1", k, v, v])
     for k, v in T.ND_CODES.items():
         s.append(["ND", k, v, ""])
+    for sh in wb.worksheets:
+        for col in sh.iter_cols():
+            w = max(len(str(c.value or "")) for c in col)
+            sh.column_dimensions[col[0].column_letter].width = min(w + 2,
+                                                                   60)
+        sh.freeze_panes = "A2"
     wb.save(out / "data_dictionary.xlsx")
 
 

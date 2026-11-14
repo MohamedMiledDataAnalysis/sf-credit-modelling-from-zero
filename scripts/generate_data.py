@@ -17,7 +17,7 @@ data/raw/data_dictionary.xlsx and Chapter 4):
     economic/     Bank of England, ONS and HM Land Registry layouts,
                   internal credit cycle index
     uk_auto/      UK automobile loan-level template (AUTL)
-    cmbs/         special servicer loan history report
+    cmbs/         servicer loan history report
     clo/          CLO trustee report, collateral portfolio
     assumptions/  rating criteria tables (illustrative)
 
