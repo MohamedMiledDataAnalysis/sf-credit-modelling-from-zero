@@ -1,5 +1,5 @@
 """
-Stochastic Calculus, Gently
+Stochastic Calculus
 
 Every code listing of this chapter, in the order of the book.
 Run from the repository root:  python chapters/ch09/listings.py
