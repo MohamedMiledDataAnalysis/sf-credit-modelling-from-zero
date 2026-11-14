@@ -120,7 +120,9 @@ monthly probability of falling into arrears.
 
 Exposure at default (balance plus accrued interest during the recovery period), the sale
 of the property after `recovery_lag_months`, the recovery, the loss and the loss severity
-(loss / exposure).
+(loss / exposure). For 52 defaults the sale month falls after December 2024: the losses
+report marks them `Property Sold` = `N`, values the sale at the December 2024 index and
+gives the servicer's estimated recovery and loss. `prepare_data.py` drops that flag.
 
 | column | meaning |
 |---|---|

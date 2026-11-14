@@ -263,6 +263,13 @@ def losses_report(defaults: pd.DataFrame, out: Path) -> None:
                  "Sale Costs",
                  "Accrued Interest", "Total Exposure at Default",
                  "Net Recovery", "Loss", "Loss Severity"]
+    # a property whose sale month falls after the reporting date is not
+    # sold yet: its sale, recovery and loss are the servicer's estimate
+    # at the December 2024 index
+    sale = (pd.PeriodIndex(defaults["default_period"], freq="M")
+            + defaults["recovery_lag_months"])
+    d["Property Sold"] = np.where(sale <= pd.Period("2024-12", "M"),
+                                  "Y", "N")
     _report(out / "Thamesbridge_losses_and_recoveries_2024-12.xlsx",
             [["Thamesbridge Mortgages No. 1 plc"],
              ["Defaults, possessions and recoveries report"],
@@ -318,6 +325,8 @@ def note_history(perf, defaults, deal, macro) -> pd.DataFrame:
             bal[c] -= x
             paid -= x
         rows.append({"period": period, "excess_spread": spread,
+                     # what is left after the loss cover (FCA IVSS19)
+                     "excess_spread_after_losses": spread - cure,
                      "pdl": pdl, "notes": sum(bal.values()),
                      "pool": g["closing_balance"].sum()})
     return pd.DataFrame(rows)
@@ -335,9 +344,15 @@ def investor_report(perf, defaults, deal, macro, out: Path) -> None:
 
     smm = p["prepayment"].sum() / p["opening_balance"].sum()
     mdr = p["default_balance"].sum() / p["opening_balance"].sum()
-    rec = defaults[(pd.PeriodIndex(defaults["default_period"], freq="M")
-                    + defaults["recovery_lag_months"]).astype(str)
-                   == "2024-12"]["recovery"].sum()
+    # recoveries of the month: the defaulted balance first (principal),
+    # any surplus covers the accrued interest (interest recoveries)
+    sold_now = defaults[(pd.PeriodIndex(defaults["default_period"],
+                                        freq="M")
+                         + defaults["recovery_lag_months"]).astype(str)
+                        == "2024-12"]
+    rec_prin = sold_now["recovery"].clip(
+        upper=sold_now["balance_at_default"]).sum()
+    rec_int = sold_now["recovery"].sum() - rec_prin
     princ = (p["principal_paid"] + p["prepayment"]).sum()
     intr = p.loc[p["status"] == "C", "interest_due"].sum()
     cum_def = perf["default_balance"].sum()
@@ -356,12 +371,12 @@ def investor_report(perf, defaults, deal, macro, out: Path) -> None:
         "IVSS7": "investor.reporting@thamesbridge.example",
         "IVSS8": "VSLC", "IVSS9": "ORIG", "IVSS10": "RMRT",
         "IVSS11": "Y", "IVSS12": "Y" if breach else "N", "IVSS13": "ND5",
-        "IVSS14": round(rec, 2), "IVSS15": 0,
+        "IVSS14": round(rec_prin, 2), "IVSS15": round(rec_int, 2),
         "IVSS16": round(princ, 2), "IVSS17": round(intr, 2),
-        "IVSS18": "N", "IVSS19": round(hist["excess_spread"], 2),
+        "IVSS18": "N", "IVSS19": round(hist["excess_spread_after_losses"], 2),
         "IVSS20": "N",
-        "IVSS21": round(100 * (hist["pool"] - hist["notes"])
-                        / hist["notes"], 4),
+        # performing pool (defaulted loans excluded) / all notes
+        "IVSS21": round(100 * hist["pool"] / hist["notes"], 4),
         "IVSS22": round(100 * (1 - (1 - smm) ** 12), 4),
         "IVSS23": 0, "IVSS24": round(p["default_balance"].sum(), 2),
         "IVSS25": 0, "IVSS26": 0,
@@ -578,7 +593,7 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL53": [cars[i][0] for i in pick],
         "AUTL54": [cars[i][1] for i in pick],
         "AUTL51": np.where(pre, event, "ND5"),
-        "AUTL52": np.where(pre, auto["amount_financed"], 0),
+        "AUTL52": np.where(pre, bal_k, 0),   # balance repaid early
         "AUTL55": reg_year,
         "AUTL56": auto["vehicle"].map({"New": "NEWX", "Used": "USED"}),
         "AUTL59": (100 * auto["amount_financed"] / val).round(2),
@@ -787,6 +802,8 @@ def dictionary(out: Path) -> None:
                     "default_period"),
                    ("Indexed Valuation at Sale", "GBP, before the "
                     "forced-sale discount", "sale_value"),
+                   ("Property Sold", "Y/N: N = sale after the reporting "
+                    "date, recovery and loss estimated", "(not kept)"),
                    ("Other columns", "GBP, %, months or ratio",
                     "same order as rmbs_defaults.csv")],
         "Deal": [("Transaction sheet", "Item / Value", "rmbs_deal.json"),

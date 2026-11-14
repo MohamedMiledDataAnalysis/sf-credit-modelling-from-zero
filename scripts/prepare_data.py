@@ -168,6 +168,8 @@ def prepare_defaults() -> pd.DataFrame:
     d = read_report(RAW / "uk_rmbs" /
                     "Thamesbridge_losses_and_recoveries_2024-12.xlsx")
     d["Default Date"] = pd.to_datetime(d["Default Date"]).dt.strftime("%Y-%m")
+    # N: property not sold by the reporting date, recovery estimated
+    d = d.drop(columns="Property Sold")
     d.columns = ["loan_id", "default_period", "months_since_origination",
                  "balance_at_default", "indexed_value_at_default",
                  "indexed_ltv_at_default", "recovery_lag_months",

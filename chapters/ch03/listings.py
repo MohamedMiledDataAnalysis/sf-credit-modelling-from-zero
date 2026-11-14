@@ -26,7 +26,7 @@ print(type(360), type(monthly_rate))
 
 # --- Listing 03.5 ------------------------------------
 loan_id = "TB000001"
-region = "Wales"
+region = "London"
 print(loan_id, "is in", region)
 
 # --- Listing 03.6 ------------------------------------

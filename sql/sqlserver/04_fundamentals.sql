@@ -57,7 +57,11 @@ CREATE NONCLUSTERED INDEX ix_perf_period_status
     INCLUDE (closing_balance);
 GO
 
--- ---- Block 5 (full ten-column version of the book's shortened load) --------------------------------------------------
+-- ---- Block 5 (full ten-column version of the book's shortened load) ----
+-- 2025-01.csv stands for next month's file, with the ten columns of
+-- dbo.performance. The repository has no such file: without it,
+-- BULK INSERT stops with "file does not exist" and nothing is loaded.
+-- Point it at a file of your own to try the block.
 DROP TABLE IF EXISTS #stage;   -- lets you run the block twice in a session
 BEGIN TRY
   BEGIN TRANSACTION;
