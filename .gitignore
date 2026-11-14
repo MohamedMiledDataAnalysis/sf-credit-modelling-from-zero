@@ -16,6 +16,10 @@ outputs/*
 # OS
 .DS_Store
 Thumbs.db
+# FCA schema files a reader downloads to validate the XML (Chapter 4)
+*.xsd
+SRCP*.xlsx
+validation_rules_*.xlsx
 # Model tables built by scripts/prepare_data.py from data/raw/
 data/*.csv
 data/*.csv.gz

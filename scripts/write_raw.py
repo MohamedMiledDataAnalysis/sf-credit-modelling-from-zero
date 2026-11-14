@@ -9,6 +9,7 @@ dictionary. scripts/prepare_data.py turns them into the model tables.
 from __future__ import annotations
 
 import csv
+import io
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,7 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
+import fca_xml
 import templates as T
 
 LEI = "FICTTHAMESBRIDGE0001"          # fictional, 20 characters
@@ -56,6 +58,12 @@ def _report(path, title_lines, df, sheet="Report"):
     wb.save(path)
 
 
+def _as_text(df: pd.DataFrame) -> pd.DataFrame:
+    """Every value as the text a CSV export would hold."""
+    return pd.read_csv(io.StringIO(df.to_csv(index=False)), dtype=str,
+                       keep_default_na=False)
+
+
 def _month_end(period: str) -> str:
     return pd.Period(period, "M").to_timestamp(how="end").strftime("%Y-%m-%d")
 
@@ -78,7 +86,7 @@ def rmbs_loan_level(loans: pd.DataFrame, out: Path, rng) -> None:
         "RREL3": loans["loan_id"],
         "RREL4": ["OB" + s[2:] for s in loans["loan_id"]],
         "RREL5": ["OB" + s[2:] for s in loans["loan_id"]],
-        "RREL6": ["2019-12-31"] * n, "RREL7": ["2020-01-31"] * n,
+        "RREL6": ["2019-12-31"] * n, "RREL7": ["2019-12-31"] * n,
         "RREL8": nd5, "RREL9": nd5, "RREL10": ["Y"] * n,
         "RREL11": nuts3, "RREL12": [2016] * n,
         "RREL13": np.where(loans["employment"] == "Employed", "EMUK", "SFEM"),
@@ -117,7 +125,6 @@ def rmbs_loan_level(loans: pd.DataFrame, out: Path, rng) -> None:
         "RREL82": [lender] * n, "RREL83": [LEI] * n, "RREL84": ["GB"] * n,
     }
     rrel = pd.DataFrame(v)[[c for c, _, _ in T.fields(T.RREL)]]
-    rrel.to_csv(out / "THAMESBRIDGE_RRE_RREL_2019-12-31.csv", index=False)
 
     occ = loans["occupancy"].map({"Owner-occupied": "FOWN",
                                   "Buy-to-let": "TLET"})
@@ -135,10 +142,13 @@ def rmbs_loan_level(loans: pd.DataFrame, out: Path, rng) -> None:
         "RREC16": loans["original_ltv"],
         "RREC17": loans["property_value"], "RREC18": ["FIEI"] * n,
         "RREC19": loans["origination_date"], "RREC20": nd5,
-        "RREC21": nd5, "RREC22": ["GBP"] * n, "RREC23": nd5,
+        "RREC21": nd5, "RREC22": ["GBP"] * n, "RREC23": ["NGUA"] * n,
     }
     rrec = pd.DataFrame(c)[[c for c, _, _ in T.fields(T.RREC)]]
-    rrec.to_csv(out / "THAMESBRIDGE_RRE_RREC_2019-12-31.csv", index=False)
+    table = _as_text(rrel).merge(_as_text(rrec), left_on="RREL3",
+                                 right_on="RREC2")
+    fca_xml.write_report(table, "RRE",
+                         out / "THAMESBRIDGE_RRE_2019-12-31.zip")
 
     extra = pd.DataFrame({"Loan Identifier": loans["loan_id"],
                           "Bureau Score at Origination":
@@ -372,6 +382,9 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL31": [100] * n, "AUTL32": ["FRXX"] * n,
         "AUTL34": ["MNTH"] * n, "AUTL35": ["MNTH"] * n,
         "AUTL36": ["CDTX"] * n, "AUTL39": dep, "AUTL40": auto["apr"],
+        "AUTL47": [max(0, (pd.Period("2023-06", "M") - p).n)
+                   for p in start],
+        "AUTL53": ["ND1"] * n, "AUTL54": ["ND1"] * n,
         "AUTL51": np.where(pre, event, "ND5"),
         "AUTL52": np.where(pre, auto["amount_financed"], 0),
         "AUTL56": auto["vehicle"].map({"New": "NEWX", "Used": "USED"}),
@@ -386,8 +399,9 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL81": ["GB"] * n, "AUTL82": [lender] * n,
         "AUTL83": [AUTO_LEI] * n, "AUTL84": ["GB"] * n,
     })
-    pd.DataFrame(v).to_csv(out / "WESSEX_AUTO_AUTL_2024-12-31.csv",
-                           index=False)
+    autl = pd.DataFrame(v)[[c for c, _, _ in T.fields(T.AUTL)]]
+    fca_xml.write_report(_as_text(autl), "AUT",
+                         out / "WESSEX_AUTO_2024-12-31.zip")
     extra = pd.DataFrame({"Agreement Number": auto["loan_id"],
                           "Bureau Score at Origination": auto["credit_score"]})
     _report(out / "Wessex_originator_additional_data_2024-12-31.xlsx",
@@ -463,10 +477,11 @@ def dictionary(out: Path) -> None:
     ws = wb.active
     ws.title = "Files"
     files = [
-        ("uk_rmbs/THAMESBRIDGE_RRE_RREL_2019-12-31.csv", "RREL",
-         "UK RRE template, loan section (FCA SECN Annex 2)", "Cut-off"),
-        ("uk_rmbs/THAMESBRIDGE_RRE_RREC_2019-12-31.csv", "RREC",
-         "UK RRE template, collateral section", "Cut-off"),
+        ("uk_rmbs/THAMESBRIDGE_RRE_2019-12-31.zip", "RREL, RREC",
+         "FCA underlying exposure report, zipped XML "
+         "(DRAFT3auth.099.001.04), "
+         "residential real estate: loan and collateral sections",
+         "Cut-off"),
         ("uk_rmbs/Thamesbridge_originator_additional_data_2019-12-31.xlsx",
          "Additional", "Originator data outside the template", "Cut-off"),
         ("uk_rmbs/Thamesbridge_deal_summary.xlsx", "Deal",
@@ -486,8 +501,10 @@ def dictionary(out: Path) -> None:
          "HM Land Registry UK HPI full file", "Monthly"),
         ("economic/internal_credit_cycle_index.csv", "Economic",
          "Internal credit cycle index (model input)", "Monthly"),
-        ("uk_auto/WESSEX_AUTO_AUTL_2024-12-31.csv", "AUTL",
-         "UK automobile template (FCA SECN Annex 5)", "Cut-off"),
+        ("uk_auto/WESSEX_AUTO_2024-12-31.zip", "AUTL",
+         "FCA underlying exposure report, zipped XML "
+         "(DRAFT3auth.099.001.04), "
+         "automobile", "Cut-off"),
         ("uk_auto/Wessex_originator_additional_data_2024-12-31.xlsx",
          "Additional", "Originator data outside the template", "Cut-off"),
         ("cmbs/CMBS_servicer_loan_history_2024-12.xlsx", "CMBS",
@@ -519,14 +536,21 @@ def dictionary(out: Path) -> None:
         "AUTL76": "recovery_rate_if_default",
     }
     nd_rule = {"{LIST}": "Codes in sheet Code Lists"}
+    xml = pd.read_csv(Path(fca_xml.PATHS), dtype=str,
+                      keep_default_na=False).set_index("field")
     for name, block in [("RREL", T.RREL), ("RREC", T.RREC),
                         ("AUTL", T.AUTL), ("IVSS", T.IVSS)]:
         s = wb.create_sheet(name)
         s.append(["Field Code", "Field Name", "Format", "Allowed Values",
-                  "Model Column"])
-        _header(s, 1, 5)
+                  "No-Data Codes Allowed", "XML Path", "Model Column"])
+        _header(s, 1, 7)
         for code, fname, fmt in T.fields(block):
+            x = xml.loc[code] if code in xml.index else None
             s.append([code, fname, fmt, nd_rule.get(fmt, ""),
+                      "" if x is None else x["nd_codes"],
+                      "Ccy attribute of every amount" if x is None
+                      and fmt == "{CURRENCYCODE_3}" else
+                      ("" if x is None else x["value_path"]),
                       model.get(code, "")])
 
     bespoke = {

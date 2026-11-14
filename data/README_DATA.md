@@ -11,7 +11,7 @@ only data files stored in the repository.
 
 | folder | files | real-world format |
 |---|---|---|
-| `uk_rmbs/` | `THAMESBRIDGE_RRE_RREL_2019-12-31.csv`, `..._RREC_...csv` | UK residential real estate loan-level template (FCA SECN Annex 2, field codes RREL1–RREL84 and RREC1–RREC23, no-data codes ND1–ND5) |
+| `uk_rmbs/` | `THAMESBRIDGE_RRE_2019-12-31.zip` | FCA underlying exposure report, zipped XML (message DRAFT3auth.099.001.04, XML schemas v1.3.2), residential real estate: field codes RREL1–RREL84 and RREC1–RREC23, no-data codes ND1–ND5 |
 | | `Thamesbridge_originator_additional_data_2019-12-31.xlsx` | fields outside the template (bureau score) |
 | | `Thamesbridge_deal_summary.xlsx` | term sheet summary: transaction and notes |
 | | `servicer_monthly/Thamesbridge_servicer_report_YYYY-MM.xlsx` (60 files) | monthly loan-level servicer report with a title block |
@@ -21,7 +21,7 @@ only data files stored in the repository.
 | | `ONS_MGSX_unemployment_rate.csv` | ONS time-series download (8 metadata rows) |
 | | `UK-HPI-full-file-2024-12.csv` | HM Land Registry UK House Price Index full file (first ten columns) |
 | | `internal_credit_cycle_index.csv` | internal model input |
-| `uk_auto/` | `WESSEX_AUTO_AUTL_2024-12-31.csv` + additional data | UK automobile loan-level template (FCA SECN Annex 5, AUTL1–AUTL84) |
+| `uk_auto/` | `WESSEX_AUTO_2024-12-31.zip` + additional data | FCA underlying exposure report, zipped XML, automobile: AUTL1–AUTL84 |
 | `cmbs/` | `CMBS_servicer_loan_history_2024-12.xlsx` | special servicer loan history report |
 | `clo/` | `CLO_trustee_report_2024-12.xlsx` | trustee report, collateral portfolio |
 | `assumptions/` | `rating_assumptions.xlsx` | rating criteria tables (default table by rating and year, stresses) |
@@ -29,6 +29,15 @@ only data files stored in the repository.
 `data/raw/data_dictionary.xlsx` documents every field: code, name, format, the code lists
 (for example RREL69 `PERF`, `ARRE`, `DFLT`, `RDMD`), the no-data codes and the model column
 each field feeds.
+
+Both XML reports validate against the FCA schema `DRAFT3auth.099.001.04_1.3.2.xsd` with no
+error. The schema is not stored here: download *XML schemas and validation rules* from the
+FCA securitisation page (https://www.fca.org.uk/markets/securitisation) and run
+`fca_xml.validate(report, xsd)` from `scripts/fca_xml.py`. `scripts/fca_xml_paths.csv` gives
+the XML path, the allowed no-data codes and the FCA validation rule of every field; it was
+taken from the FCA validation rules workbook v1.3.2. `prepare_data.py` applies those
+validation rules each time it runs. The LEIs are fictional, so the GLEIF look-up rule cannot
+pass and is not applied.
 
 The values in the templates are synthetic; the field codes, formats and code lists are those
 of the templates. The economic files copy the layouts of the public downloads; their values
@@ -40,8 +49,8 @@ are synthetic and the ONS file says so in its title row.
 python scripts/prepare_data.py
 ```
 
-Run it once after cloning (it takes about a minute). It decodes the template codes with the
-data dictionary, checks formats and no-data codes, joins the loan and collateral sections,
+Run it once after cloning (it takes about two minutes). It reads the XML reports, applies the FCA validation rules, decodes the template codes with
+the data dictionary, checks formats and no-data codes, joins the loan and collateral sections,
 stacks the 60 servicer reports, reconciles the last report with the investor report and
 writes the tables below. These tables are not stored in the repository, because they are
 outputs of the preparation step.

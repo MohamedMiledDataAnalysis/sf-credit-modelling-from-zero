@@ -57,8 +57,8 @@ transaction (Thamesbridge Mortgages No. 1 plc) are fictional. Rating levels, str
 default tables are illustrative teaching values; they are not the criteria of any credit
 rating agency and must not be used to rate, buy or sell any security.
 
-The input files in `data/raw/` are in the formats of real work: the UK loan-level
-templates (field codes RREL, RREC, AUTL), monthly servicer reports, an investor report,
+The input files in `data/raw/` are in the formats of real work: the FCA underlying exposure
+reports in XML (field codes RREL, RREC, AUTL; schema-valid against the FCA XML schemas v1.3.2), monthly servicer reports, an investor report,
 a trustee report and the layouts of the Bank of England, ONS and HM Land Registry
 downloads. `data/raw/data_dictionary.xlsx` documents every field and code.
 

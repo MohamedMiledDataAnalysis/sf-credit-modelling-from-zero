@@ -1,7 +1,8 @@
 """Turn the raw files of data/raw/ into the model tables of data/.
 
-This is the preparation step of real work: the loan tapes, servicer
-reports and economic series arrive in their own formats, and the models
+This is the preparation step of real work: the loan-level data arrive
+as the FCA XML report, the servicer reports as Excel workbooks and the
+economic series in the layouts of their publishers, and the models
 read clean tables. Chapter 4 walks through this file.
 
     python scripts/prepare_data.py            # from the repository root
@@ -16,6 +17,8 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+
+import fca_xml
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
@@ -65,16 +68,16 @@ def months_between(a: pd.Series, b: pd.Series) -> pd.Series:
 # --------------------------------------------------------------- UK RMBS
 def prepare_rmbs_loans(lists) -> pd.DataFrame:
     folder = RAW / "uk_rmbs"
-    rrel = pd.read_csv(folder / "THAMESBRIDGE_RRE_RREL_2019-12-31.csv",
-                       dtype=str)
-    rrec = pd.read_csv(folder / "THAMESBRIDGE_RRE_RREC_2019-12-31.csv",
-                       dtype=str)
+    # the FCA XML report: one record per loan, with its property
+    df = fca_xml.read_report(folder / "THAMESBRIDGE_RRE_2019-12-31.zip",
+                             "RRE")
     extra = read_report(folder / "Thamesbridge_originator_additional_data"
                         "_2019-12-31.xlsx")
-    assert rrel["RREL3"].is_unique, "duplicate loan identifiers"
-    # one property per loan: join the collateral section on RREC2
-    df = rrel.merge(rrec, left_on="RREL3", right_on="RREC2",
-                    how="left", validate="one_to_one")
+    problems = fca_xml.check_rules(df, "RRE")
+    if problems:
+        sys.exit("FCA validation rules: " + "; ".join(problems))
+    assert df["RREL3"].is_unique, "duplicate loan identifiers"
+    assert (df["RREL3"] == df["RREC2"]).all(), "property not on its loan"
     df = df.merge(extra, left_on="RREL3", right_on="Loan Identifier",
                   how="left", validate="one_to_one")
     cutoff = df["RREL6"].iloc[0]
@@ -221,7 +224,10 @@ def prepare_macro() -> pd.DataFrame:
 # --------------------------------------------------------------- auto
 def prepare_auto(lists) -> pd.DataFrame:
     folder = RAW / "uk_auto"
-    a = pd.read_csv(folder / "WESSEX_AUTO_AUTL_2024-12-31.csv", dtype=str)
+    a = fca_xml.read_report(folder / "WESSEX_AUTO_2024-12-31.zip", "AUT")
+    problems = fca_xml.check_rules(a, "AUT")
+    if problems:
+        sys.exit("FCA validation rules: " + "; ".join(problems))
     extra = read_report(folder / "Wessex_originator_additional_data"
                         "_2024-12-31.xlsx")
     a = a.merge(extra, left_on="AUTL3", right_on="Agreement Number",

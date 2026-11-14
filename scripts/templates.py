@@ -327,6 +327,7 @@ CODE_LISTS = [
     ("RREC9", "RFLT", "Residential (Flat or Apartment)", "Flat"),
     ("RREC9", "RBGL", "Residential (Bungalow)", "Bungalow"),
     ("RREC9", "RTHS", "Residential (Terraced House)", "House"),
+    ("RREC23", "NGUA", "No Guarantor", ""),
     ("RREC14", "FIEI", "Full, internal and external inspection", ""),
     ("RREC14", "IDXD", "Indexed", ""),
     ("RREC18", "FIEI", "Full, internal and external inspection", ""),
