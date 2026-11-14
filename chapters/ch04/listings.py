@@ -38,7 +38,7 @@ south = loans[loans["region"].isin(["London", "South East"])]
 print(len(btl_london), len(south))
 
 # --- Listing 04.7 ------------------------------------
-print(loans.loc[loans["current_balance"] > 800000,
+print(loans.loc[loans["current_balance"] > 650000,
                 ["loan_id", "current_balance", "region"]])
 
 # --- Listing 04.8 ------------------------------------
@@ -289,7 +289,7 @@ def stratify(df, column, edges=None, labels=None):
     return table.round(2)
 
 # --- Listing 04.39 -----------------------------------
-rate_edges = [0, 1.0, 1.5, 2.0, 2.5, 4.0]
+rate_edges = [0, 1.0, 1.5, 2.0, 2.5, 5.0]
 rate_labels = ["<=1.0", "1.0-1.5", "1.5-2.0", "2.0-2.5", ">2.5"]
 print(stratify(loans, "interest_rate", rate_edges,
                rate_labels))

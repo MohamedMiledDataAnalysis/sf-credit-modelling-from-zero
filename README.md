@@ -63,6 +63,14 @@ reports in XML (field codes RREL, RREC, AUTL; schema-valid against the FCA XML s
 a trustee report and the layouts of the Bank of England, ONS and HM Land Registry
 downloads. `data/raw/data_dictionary.xlsx` documents every field and code.
 
+The Thamesbridge pool holds 10,000 mortgages with a balance of £1,730.1 million at the
+cut-off date, 31 December 2019. Each loan pays its fixed rate until its product end date,
+then Bank Rate + 3.75% (4.50% at the cut-off date for the 4,875 loans, 48.75%, past their
+fixed period; Bank Rate stays at 0.75% until February 2020, then SONIA + 3.75%). The
+performance file has 450,834 monthly rows (January 2020 to December 2024), with 555 defaults
+and 3,758 full prepayments.
+`data/README_DATA.md` gives the details.
+
 Build the model tables once after cloning:
 
 ```bash

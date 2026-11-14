@@ -77,7 +77,7 @@ print("Severity at 0%, 25%, 45% decline:",
 from sfrating import cashflow, data
 
 deal = data.load_deal()
-pool = cashflow.project_pool(deal["pool_balance"], 285,
+pool = cashflow.project_pool(deal["pool_balance"], 284,
                              cum_default=0.10, severity=0.30,
                              cpr=0.10)
 res = cashflow.run_waterfall(pool, deal, sonia_pct=3.0)
@@ -168,7 +168,7 @@ levels = rmbs.rating_level_losses(
     loans, base_pd, data.load_rating_stresses())
 stages["rating levels"] = time.perf_counter() - t0
 t0 = time.perf_counter()
-results = rating.scenario_results(deal, levels, 285)
+results = rating.scenario_results(deal, levels, 284)
 stages["cashflow scenarios"] = time.perf_counter() - t0
 total = sum(stages.values())
 for name, t in stages.items():
@@ -512,7 +512,7 @@ def test_thamesbridge_ratings_unchanged():
     args = run_rating.parse_args(["--output-dir", "outputs"])
     out = run_rating.run(args)
     assert out["ratings"].to_dict() == EXPECTED
-    assert out["remaining_term"] == 285
+    assert out["remaining_term"] == 284
 
 test_thamesbridge_ratings_unchanged()
 print("Regression test passed")
@@ -533,7 +533,7 @@ print(pd.DataFrame(table).T.to_string())
 
 # --- Listing 22.37 -----------------------------------
 print(0.1000005 == pytest.approx(0.1))
-print(1_736_526_998.32 == pytest.approx(1_736_527_000))
+print(1_730_141_808.32 == pytest.approx(1_730_141_810))
 print(1e-9 == pytest.approx(0))
 
 # --- Listing 22.38 -----------------------------------

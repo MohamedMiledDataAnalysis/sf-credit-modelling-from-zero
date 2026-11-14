@@ -31,7 +31,7 @@ def annualise(pd_horizon, years):
     """Constant annual PD giving the same cumulative PD."""
     return 1 - (1 - np.asarray(pd_horizon)) ** (1 / years)
 
-p_annual = annualise(0.054, 5)
+p_annual = annualise(0.0555, 5)
 print(f"Annual PD: {p_annual:.4%}")
 print(f"Back to 5 years: {1 - (1 - p_annual) ** 5:.4%}")
 
@@ -54,7 +54,7 @@ print(f"Severity weighted by exposure: {weighted:.2%}")
 plt.hist(sev * 100, bins=30)
 plt.xlabel("Loss severity (%)")
 plt.ylabel("Number of defaults")
-plt.title("Half of defaults lose nothing")
+plt.title("Two in five defaults lose nothing")
 plt.savefig("figures/ch10_severity_hist.png")
 
 # --- Listing 10.6 ------------------------------------
@@ -194,7 +194,7 @@ print(yearly.round(4))
 
 # --- Listing 10.20 -----------------------------------
 from sfrating import pd_model
-print(f"{pd_model.annualise(0.054, 5):.4%}")
+print(f"{pd_model.annualise(0.0555, 5):.4%}")
 el_check = pd_model.expected_loss(loans["pd_5y"], loans["lgd"],
                                   loans["ead"])
 print(f"£{el_check:,.0f}")

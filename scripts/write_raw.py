@@ -122,6 +122,8 @@ def rmbs_loan_level(loans: pd.DataFrame, out: Path, rng) -> None:
     payment = np.where(io, loans["current_balance"] * rate, annuity).round(2)
     nuts3 = loans["region"].map(T.NUTS3_EXAMPLE)
     lender = "Thamesbridge Building Society"
+    fixed = (pd.to_datetime(loans["product_end_date"])
+             > pd.Timestamp("2019-12-31")).to_numpy()
     v = {
         "RREL1": [UID_RMBS] * n, "RREL2": loans["loan_id"],
         "RREL3": loans["loan_id"],
@@ -148,12 +150,17 @@ def rmbs_loan_level(loans: pd.DataFrame, out: Path, rng) -> None:
         "RREL37": ["MNTH"] * n, "RREL38": ["MNTH"] * n,
         "RREL39": payment, "RREL40": ["ND1"] * n,
         "RREL41": np.where(io, loans["current_balance"], 0),
-        "RREL42": ["FLCF"] * n, "RREL43": loans["interest_rate"],
-        "RREL44": nd5, "RREL45": nd5, "RREL46": nd5, "RREL47": nd5,
-        "RREL48": nd5, "RREL49": nd5, "RREL50": [3.75] * n,
-        "RREL51": loans["product_end_date"], "RREL52": nd5,
-        "RREL53": nd5, "RREL54": nd5, "RREL55": nd5,
-        "RREL56": ["BOER"] * n, "RREL57": nd5,
+        # fixed-rate loans revert to Bank Rate + 3.75% when the fixed
+        # period ends; loans already past it pay that rate at cut-off
+        "RREL42": np.where(fixed, "FLCF", "FLIF"),
+        "RREL43": loans["interest_rate"],
+        "RREL44": np.where(fixed, "ND5", "BOER"), "RREL45": nd5,
+        "RREL46": np.where(fixed, "ND5", "3.75"), "RREL47": nd5,
+        "RREL48": nd5, "RREL49": nd5,
+        "RREL50": np.where(fixed, "3.75", "ND5"),
+        "RREL51": np.where(fixed, loans["product_end_date"], "ND5"),
+        "RREL52": nd5, "RREL53": nd5, "RREL54": nd5, "RREL55": nd5,
+        "RREL56": np.where(fixed, "BOER", "ND5"), "RREL57": nd5,
         "RREL58": loans["seasoning_months"], "RREL59": [10] * n,
         "RREL60": nd5, "RREL61": nd5,
         "RREL62": loans["product_end_date"], "RREL63": nd5,
@@ -266,7 +273,58 @@ def losses_report(defaults: pd.DataFrame, out: Path) -> None:
                    "Net Recovery", "Loss"], dates=["Default Date"])
 
 
-def investor_report(perf, defaults, deal, out: Path) -> None:
+def note_history(perf, defaults, deal, macro) -> pd.DataFrame:
+    """Month-by-month notes, excess spread and principal deficiency.
+
+    Sequential principal; interest on each class at SONIA plus its
+    margin (Class Z has no coupon); senior fees on the pool balance;
+    excess spread cures the principal deficiency ledger, which records
+    each principal loss when the property is sold, as the deal summary
+    says. Notes exceed the pool by the defaulted balances still waiting
+    for a sale plus the uncured deficiency.
+    """
+    sonia = dict(zip(macro["period"], macro["sonia"]))
+    lag = (pd.PeriodIndex(defaults["default_period"], freq="M")
+           + defaults["recovery_lag_months"]).astype(str)
+    # recoveries repay the defaulted balance first; any surplus covers
+    # the accrued interest and is revenue
+    rec_prin = defaults["recovery"].clip(upper=defaults["balance_at_default"])
+    rec_by_month = rec_prin.groupby(lag).sum()
+    rec_int_by_month = (defaults["recovery"] - rec_prin).groupby(lag).sum()
+    # the principal loss is booked when the property is sold
+    loss_by_month = (defaults["balance_at_default"] - rec_prin
+                     ).groupby(lag).sum()
+    classes = [(t["class"], t["balance"], t["margin_pct"] or 0.0)
+               for t in deal["tranches"]]
+    bal = {c: b for c, b, _ in classes}
+    pdl = 0.0
+    rows = []
+    for period, g in perf.groupby("period", sort=True):
+        interest = g.loc[g["status"] == "C", "interest_due"].sum()
+        recoveries = rec_by_month.get(period, 0.0)
+        fees = g["opening_balance"].sum() * deal["senior_fees_bps_per_year"] \
+            / 10_000 / 12
+        coupon = sum(bal[c] * (sonia[period] + m) / 1200
+                     for c, _, m in classes if c != "Z")
+        interest += rec_int_by_month.get(period, 0.0)
+        spread = interest - fees - coupon
+        pdl += loss_by_month.get(period, 0.0)
+        cure = min(max(spread, 0.0), max(pdl, 0.0))
+        pdl -= cure
+        paid = (g["principal_paid"].sum() + g["prepayment"].sum()
+                + recoveries + cure)
+        for c, _, _ in classes:                  # sequential pay-down
+            x = min(bal[c], paid)
+            bal[c] -= x
+            paid -= x
+        rows.append({"period": period, "excess_spread": spread,
+                     "pdl": pdl, "notes": sum(bal.values()),
+                     "pool": g["closing_balance"].sum()})
+    return pd.DataFrame(rows)
+
+
+def investor_report(perf, defaults, deal, macro, out: Path) -> None:
+    hist = note_history(perf, defaults, deal, macro).iloc[-1]
     p = perf[perf["period"] == "2024-12"]
     live = p[p["status"].isin(["C", "30", "60", "90"])]
     pool = live["closing_balance"].sum()
@@ -300,7 +358,10 @@ def investor_report(perf, defaults, deal, out: Path) -> None:
         "IVSS11": "Y", "IVSS12": "Y" if breach else "N", "IVSS13": "ND5",
         "IVSS14": round(rec, 2), "IVSS15": 0,
         "IVSS16": round(princ, 2), "IVSS17": round(intr, 2),
-        "IVSS18": "N", "IVSS19": "ND5", "IVSS20": "N", "IVSS21": "ND5",
+        "IVSS18": "N", "IVSS19": round(hist["excess_spread"], 2),
+        "IVSS20": "N",
+        "IVSS21": round(100 * (hist["pool"] - hist["notes"])
+                        / hist["notes"], 4),
         "IVSS22": round(100 * (1 - (1 - smm) ** 12), 4),
         "IVSS23": 0, "IVSS24": round(p["default_balance"].sum(), 2),
         "IVSS25": 0, "IVSS26": 0,
@@ -475,6 +536,16 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
     orig_year = np.array([int(o[:4]) for o in orig])
     reg_year = np.where(auto["vehicle"] == "New", orig_year,
                         orig_year - rng.integers(1, 6, n))
+    # vehicle and obligor details: common UK makes and models, and the
+    # obligor's NUTS3 area (one per region, as in the mortgage report)
+    cars = [("Ford", "Fiesta"), ("Ford", "Puma"), ("Vauxhall", "Corsa"),
+            ("Volkswagen", "Golf"), ("Volkswagen", "Polo"),
+            ("Nissan", "Qashqai"), ("Toyota", "Yaris"), ("Kia", "Sportage"),
+            ("Hyundai", "Tucson"), ("BMW", "1 Series"),
+            ("Audi", "A3"), ("Mercedes-Benz", "A-Class")]
+    pick = rng.integers(0, len(cars), n)
+    areas = list(T.NUTS3_EXAMPLE.values())
+    area = np.array(areas)[rng.integers(0, len(areas), n)]
     lender = "Wessex Motor Finance Limited"
     v = {c: nd5 for c, _, _ in T.fields(T.AUTL)}
     v.update({
@@ -487,7 +558,7 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL6": ["2024-12-31"] * n,
         "AUTL7": [max("2023-06-30", _month_end(o[:7])) for o in orig],
         "AUTL9": np.where(pre, event, np.where(matured, mat, "ND5")),
-        "AUTL10": ["ND1"] * n, "AUTL11": ["ND1"] * n,
+        "AUTL10": area, "AUTL11": [2016] * n,
         "AUTL12": ["ND1"] * n, "AUTL13": ["N"] * n,
         "AUTL14": ["INDV"] * n, "AUTL15": ["ND1"] * n,
         "AUTL16": ["ND1"] * n, "AUTL17": ["ND1"] * n,
@@ -504,7 +575,8 @@ def auto_loan_level(auto: pd.DataFrame, out: Path, rng) -> None:
         "AUTL38": balloon, "AUTL39": dep, "AUTL40": auto["apr"],
         "AUTL47": [max(0, (pd.Period("2023-06", "M") - p).n)
                    for p in start],
-        "AUTL53": ["ND1"] * n, "AUTL54": ["ND1"] * n,
+        "AUTL53": [cars[i][0] for i in pick],
+        "AUTL54": [cars[i][1] for i in pick],
         "AUTL51": np.where(pre, event, "ND5"),
         "AUTL52": np.where(pre, auto["amount_financed"], 0),
         "AUTL55": reg_year,
@@ -659,7 +731,7 @@ def dictionary(out: Path) -> None:
         "RREL16": "income", "RREL23": "origination_date",
         "RREL25": "term_months", "RREL29": "original_balance",
         "RREL30": "current_balance", "RREL35": "repayment_type",
-        "RREL43": "interest_rate", "RREL51": "product_end_date",
+        "RREL43": "interest_rate", "RREL62": "product_end_date",
         "RREL58": "seasoning_months", "RREC7": "occupancy",
         "RREC9": "property_type", "RREC12": "current_ltv",
         "RREC16": "original_ltv", "RREC17": "property_value",
@@ -776,7 +848,7 @@ def write_all(raw: Path, rng, macro, loans, perf, defaults, deal, cmbs,
     rmbs_loan_level(loans, dirs["uk_rmbs"], rng)
     servicer_tapes(perf, dirs["uk_rmbs"])
     losses_report(defaults, dirs["uk_rmbs"])
-    investor_report(perf, defaults, deal, dirs["uk_rmbs"])
+    investor_report(perf, defaults, deal, macro, dirs["uk_rmbs"])
     deal_summary(deal, dirs["uk_rmbs"])
     economic(macro, dirs["economic"])
     auto_loan_level(auto, dirs["uk_auto"], rng)

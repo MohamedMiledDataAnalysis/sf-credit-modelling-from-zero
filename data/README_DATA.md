@@ -62,7 +62,16 @@ runs while their contents do not.
 
 ## rmbs_loans.csv — the loan tape at the cut-off date (10,000 rows)
 
-Cut-off date 31 December 2019. Every loan is current (no arrears) at the cut-off date.
+Cut-off date 31 December 2019. Every loan is current (no arrears) at the cut-off date. The
+pool balance is £1,730,141,807.95 (£1,730.1 million).
+
+**Interest rates.** Each mortgage pays its initial fixed rate until `product_end_date`, then
+the reversion rate, Bank Rate + 3.75%. Bank Rate is 0.75% from August 2018, so at the cut-off
+date 4,875 loans (48.75%) are past their fixed period and pay 4.50% (0.75% + 3.75%); these
+include the loans whose fixed rate ended on 1 December 2019. The other 5,125 pay their fixed
+rate (0.90% to 3.41%). From origination to the cut-off date the
+instalment is recalculated each month at the rate in force, so `current_balance` reflects the
+higher rate after reversion.
 
 | column | meaning |
 |---|---|
@@ -72,7 +81,7 @@ Cut-off date 31 December 2019. Every loan is current (no arrears) at the cut-off
 | current_balance | balance outstanding at the cut-off date (£) |
 | property_value | valuation at origination (£) |
 | original_ltv, current_ltv | loan-to-value at origination and at cut-off (%) |
-| interest_rate | current interest rate (% per year) |
+| interest_rate | rate in force at the cut-off date (% per year): the fixed rate, or 4.50% after reversion |
 | fixed_rate_years, product_end_date | length and end of the fixed-rate product |
 | term_months, remaining_term_months, seasoning_months | contractual term, months left, months since origination |
 | repayment_type | Repayment or Interest-only |
@@ -83,11 +92,18 @@ Cut-off date 31 December 2019. Every loan is current (no arrears) at the cut-off
 | income, loan_to_income | gross annual income (£) and original balance / income |
 | credit_score | bureau-style score, 0–999 |
 
-## rmbs_performance.csv.gz — monthly performance (449,052 rows)
+## rmbs_performance.csv.gz — monthly performance (450,834 rows)
 
 One row per loan per month from 2020-01 to 2024-12 while the loan is alive. The month in which
 a loan defaults (status DEF) or repays in full (status PRE) is included; after that the loan
-has no more rows.
+has no more rows. Over the 60 months 555 loans default and 3,758 repay in full.
+
+Bank Rate stays at 0.75% in January and February 2020, so the reversion rate is 4.50% in
+those two months. From March 2020 the reversion rate is the `sonia` series of `macro.csv` +
+3.75%, month by month (3.85% while SONIA is 0.10%). The scheduled payment is recalculated every month from the opening balance, the rate
+in force and the remaining term (interest only for interest-only loans). When a loan reverts,
+the rise of its payment over the payment at the fixed rate (the payment shock) raises its
+monthly probability of falling into arrears.
 
 | column | meaning |
 |---|---|
@@ -95,12 +111,12 @@ has no more rows.
 | period | month, YYYY-MM |
 | status | C (current), 30, 60, 90 (days past due), DEF (default: 120+ days past due), PRE (prepaid) |
 | opening_balance, closing_balance | balance at the start and end of the month (£) |
-| scheduled_payment | contractual monthly payment (£) |
+| scheduled_payment | contractual monthly payment at this month's rate (£) |
 | principal_paid, interest_due | principal repaid and interest due this month (£) |
 | prepayment | balance repaid early this month (£) |
 | default_balance | balance written into default this month (£) |
 
-## rmbs_defaults.csv — one row per defaulted loan (540 rows)
+## rmbs_defaults.csv — one row per defaulted loan (555 rows)
 
 Exposure at default (balance plus accrued interest during the recovery period), the sale
 of the property after `recovery_lag_months`, the recovery, the loss and the loss severity
@@ -110,7 +126,7 @@ of the property after `recovery_lag_months`, the recovery, the loss and the loss
 |---|---|
 | loan_id | links to rmbs_loans.csv |
 | default_period | month of default, YYYY-MM |
-| months_since_origination | age of the loan at default |
+| months_since_origination | age of the loan at default (months from origination to the default month) |
 | balance_at_default | balance written into default (£) |
 | indexed_value_at_default, indexed_ltv_at_default | property value indexed by `hpi` (£) and balance / value (%) |
 | recovery_lag_months | months from default to the sale of the property (9–21) |
@@ -119,7 +135,7 @@ of the property after `recovery_lag_months`, the recovery, the loss and the loss
 | sale_costs | 4.5% of `sale_value` plus £3,500 |
 | accrued_interest | interest accrued on the balance during the recovery lag (£) |
 | exposure_at_default | balance_at_default + accrued_interest (£) |
-| recovery | sale_value × (1 − forced_sale_discount) − sale_costs, capped at the exposure, floored at 0 (£); the file rounds the discount to 3 decimals, so recomputing gives up to £231 of difference |
+| recovery | sale_value × (1 − forced_sale_discount) − sale_costs, capped at the exposure, floored at 0 (£); the file rounds the discount to 3 decimals, so recomputing gives up to £243 of difference |
 | loss, loss_severity | exposure − recovery (£) and loss / exposure |
 
 ## macro.csv — monthly economy (60 rows)
@@ -169,7 +185,7 @@ them, with four points to know.
   `python -c "import pandas as pd; pd.read_csv('data/rmbs_performance.csv.gz').to_csv('outputs/rmbs_performance.csv', index=False)"`.
   Without Python: copy the `.gz` file into `outputs/`, then double-click the copy in Finder
   (macOS) or open it with 7-Zip and choose *7-Zip → Extract Here* (Windows). The unzipped file is
-  29.8 MB with 449,053 lines (header included), below Excel's limit of 1,048,576 rows.
+  30.1 MB with 450,835 lines (header included), below Excel's limit of 1,048,576 rows.
   Keep the `.gz` file in `data/`: the code reads it.
 * **Months become dates.** Excel turns `period` and `default_period` (`2020-01`) into the
   date 1 January 2020 and displays it as `Jan-20` or `01/01/2020`, depending on your settings.

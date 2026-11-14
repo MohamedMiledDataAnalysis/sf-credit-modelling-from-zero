@@ -96,8 +96,9 @@ def prepare_rmbs_loans(lists) -> pd.DataFrame:
         "original_ltv": number(df["RREC16"], "RREC16"),
         "current_ltv": number(df["RREC12"], "RREC12"),
         "interest_rate": number(df["RREL43"], "RREL43"),
-        "fixed_rate_years": months_between(df["RREL23"], df["RREL51"]) // 12,
-        "product_end_date": df["RREL51"],
+        # the fixed period ends when the early repayment charge ends
+        "fixed_rate_years": months_between(df["RREL23"], df["RREL62"]) // 12,
+        "product_end_date": df["RREL62"],
         "term_months": term,
         "remaining_term_months": term - seasoning,
         "seasoning_months": seasoning,

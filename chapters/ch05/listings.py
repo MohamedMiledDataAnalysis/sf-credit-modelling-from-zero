@@ -27,7 +27,7 @@ for n in [10, 100, 1000, 20000]:
     print(f"after {n:>6} picks: {running[n - 1]:.4f}")
 
 plt.plot(np.arange(1, 20001), running)
-plt.axhline(0.054, color="#C9A227", linestyle="--")
+plt.axhline(0.0555, color="#C9A227", linestyle="--")
 plt.xscale("log")
 plt.xlabel("Number of random picks (log scale)")
 plt.ylabel("Share of defaulted picks")

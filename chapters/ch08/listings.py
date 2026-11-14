@@ -247,7 +247,7 @@ for start in range(0, 20_000, 2_000):
     sim_io[start:start + 2_000] = (u < pd_io).sum(axis=1)
 print(f"Expected defaults: {pd_io.sum():.1f}")
 print(f"Simulated 5%-95%: {np.quantile(sim_io, [0.05, 0.95])}")
-print(f"P(K >= 153): {(sim_io >= 153).mean():.3f}")
+print(f"P(K >= 177): {(sim_io >= 177).mean():.3f}")
 
 # --- Listing 08.22 -----------------------------------
 rows = {}

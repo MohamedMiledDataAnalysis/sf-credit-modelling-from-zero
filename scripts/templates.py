@@ -311,6 +311,7 @@ CODE_LISTS = [
     ("RREL42", "FXRL", "Fixed rate underlying exposure (for life)", ""),
     ("RREL42", "FLCF", "Fixed rate with compulsory future switch to floating", ""),
     ("RREL42", "FLIF", "Floating rate underlying exposure (for life)", ""),
+    ("RREL44", "BOER", "Bank of England Base Rate", ""),
     ("RREL56", "BOER", "Bank of England Base Rate", ""),
     ("RREL56", "LDOR", "Lender's Own Rate", ""),
     ("RREL69", "PERF", "Performing", "C"),

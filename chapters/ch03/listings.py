@@ -43,11 +43,11 @@ print(sum(balances))
 
 # --- Listing 03.8 ------------------------------------
 loan = {"loan_id": "TB000001",
-        "balance": 76371.26,
-        "annual_rate": 0.0163,
-        "months_left": 236}
+        "balance": 493997.47,
+        "annual_rate": 0.0218,
+        "months_left": 257}
 print(loan["balance"])
-loan["region"] = "East of England"
+loan["region"] = "London"
 print(len(loan), "region" in loan)
 
 # --- Listing 03.9 ------------------------------------
@@ -89,7 +89,7 @@ def payment(balance, annual_rate, months, repayment_type):
         return balance * annual_rate / 12
     return monthly_payment(balance, annual_rate, months)
 
-print(round(payment(131400, 0.0266, 292, "Interest-only"), 2))
+print(round(payment(141400, 0.0172, 352, "Interest-only"), 2))
 
 # --- Listing 03.14 -----------------------------------
 import traceback
@@ -195,22 +195,29 @@ is_io = loans["repayment_type"].to_numpy() == "Interest-only"
 print(f"Interest-only loans: {np.sum(is_io)}")
 
 # --- Listing 03.26 -----------------------------------
-repay_pay = monthly_payment(B, rate, n)
-io_pay = B * rate / 12
+ends = loans["product_end_date"].to_numpy()
+reverted = ends <= "2020-01-01"
+bank_rate = 0.0075    # January and February 2020
+jan_rate = np.where(reverted, bank_rate + 0.0375, rate)
+print("On the reversion rate:", np.sum(reverted))
+
+# --- Listing 03.27 -----------------------------------
+repay_pay = monthly_payment(B, jan_rate, n)
+io_pay = B * jan_rate / 12
 our_payment = np.where(is_io, io_pay, repay_pay)
 print(our_payment[:3].round(2))
 print(f"Pool total £{np.sum(our_payment):,.2f} per month")
 
-# --- Listing 03.27 -----------------------------------
+# --- Listing 03.28 -----------------------------------
 servicer = jan["scheduled_payment"].to_numpy()
 diff = np.abs(our_payment - servicer)
 print(f"Largest difference: £{np.max(diff):.4f}")
 print("Loans differing by over 1p:", np.sum(diff > 0.01))
 
-# --- Listing 03.28 -----------------------------------
+# --- Listing 03.29 -----------------------------------
 end_year = loans["product_end_date"].str[:4].to_numpy()
-resets = end_year == "2020"
-new_rate = np.where(resets, rate + 0.02, rate)
+resets = (end_year == "2020") & ~reverted
+new_rate = np.where(resets, jan_rate + 0.02, jan_rate)
 new_repay = monthly_payment(B, new_rate, n)
 new_payment = np.where(is_io, B * new_rate / 12, new_repay)
 extra = np.sum(new_payment) - np.sum(our_payment)
@@ -218,13 +225,13 @@ print(f"Loans resetting: {np.sum(resets)}")
 print(f"Extra per month: £{extra:,.0f}")
 print(f"Rise: {extra / np.sum(our_payment):.1%}")
 
-# --- Listing 03.29 -----------------------------------
+# --- Listing 03.30 -----------------------------------
 # (not executed in the book)
 # balances = [100, 200, 300, 400]
 # for i in range(3):
 #     print(i, balances[i] * 2)
 
-# --- Listing 03.30 -----------------------------------
+# --- Listing 03.31 -----------------------------------
 balances_list = [100, 200, 300, 400]
 try:
     for i in range(5):
@@ -232,10 +239,10 @@ try:
 except IndexError as err:
     print("IndexError:", err)
 
-# --- Listing 03.31 -----------------------------------
+# --- Listing 03.32 -----------------------------------
 print(round(monthly_payment(12000, 0.06, 12), 2))
 
-# --- Listing 03.32 -----------------------------------
+# --- Listing 03.33 -----------------------------------
 def total_interest(balance, annual_rate, months):
     m = monthly_payment(balance, annual_rate, months)
     return months * m - balance
@@ -246,7 +253,7 @@ for years in [25, 35]:
     print(f"{years} years: payment £{m:,.2f}, "
           f"interest £{t:,.0f}")
 
-# --- Listing 03.33 -----------------------------------
+# --- Listing 03.34 -----------------------------------
 io_share = np.sum(B[is_io]) / np.sum(B)
 wa_rate = np.sum(B * rate) / np.sum(B)
 print(f"Interest-only share of balance: {io_share:.2%}")
@@ -254,7 +261,7 @@ print(f"Weighted average rate: {wa_rate:.3%}")
 print(f"Plain average rate:    {np.mean(rate):.3%}")
 print("Loans at 2.5% or more:", np.sum(rate >= 0.025))
 
-# --- Listing 03.34 -----------------------------------
+# --- Listing 03.35 -----------------------------------
 r, n = 0.03 / 12, 300
 exact = 900 * (1 - (1 + r) ** (-n)) / r
 print(f"Formula: £{exact:,.2f}")
@@ -264,7 +271,7 @@ while monthly_payment(loan_size + 100, 0.03, n) <= 900:
     loan_size = loan_size + 100
 print(f"Search:  £{loan_size:,}")
 
-# --- Listing 03.35 -----------------------------------
+# --- Listing 03.36 -----------------------------------
 # (not executed in the book)
 # assert round(monthly_payment(1000, 0.12, 2), 2) == 507.51
 # assert abs(closing_np[-1]) < 1e-6        # schedule ends at 0

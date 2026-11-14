@@ -118,7 +118,7 @@ def class_e_loses(spread):
     worst = 0.0
     for cpr in (0.05, 0.20):
         pool = cashflow.project_pool(
-            deal["pool_balance"], 285,
+            deal["pool_balance"], 284,
             cum_default=bbb["default_frequency"],
             severity=bbb["loss_severity"], cpr=cpr)
         res = cashflow.run_waterfall(pool, deal, sonia_pct=3.0,

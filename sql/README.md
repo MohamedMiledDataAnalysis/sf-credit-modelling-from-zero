@@ -9,4 +9,4 @@
   stored procedure, function, index, transaction with `MERGE`.
 
 The arrears and roll-rate queries give the numbers printed in Chapter 22
-(for example a current-to-30 roll rate of 0.602% a month in 2021).
+(for example a current-to-30 roll rate of 0.640% a month in 2021).

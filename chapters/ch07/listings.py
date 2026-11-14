@@ -28,10 +28,10 @@ def bisection(f, a, b, tol=1e-10, max_iter=200):
 
 # --- Listing 07.2 ------------------------------------
 def f_cum(p):
-    return 1 - (1 - p) ** 5 - 0.054
+    return 1 - (1 - p) ** 5 - 0.0555
 
 root = bisection(f_cum, 0.0, 0.05)
-exact = 1 - (1 - 0.054) ** (1 / 5)
+exact = 1 - (1 - 0.0555) ** (1 / 5)
 print(f"Bisection:   {root:.10f}")
 print(f"Closed form: {exact:.10f}")
 
@@ -141,7 +141,7 @@ print(f"quad: {el_quad:,.2f}  (error estimate {err_est:.1e})")
 print(f"Loss severity: {el_quad / exposure:.2%}")
 
 # --- Listing 07.11 -----------------------------------
-k, n = 540, 10_000
+k, n = 555, 10_000
 
 def neg_log_lik(p):
     return -(k * np.log(p) + (n - k) * np.log(1 - p))
@@ -288,14 +288,14 @@ print(round(ll(0.075), 6), round(ll(0.05), 6))
 
 # --- Listing 07.24 -----------------------------------
 perf = pd.read_csv("data/rmbs_performance.csv.gz")
-row = perf[(perf["loan_id"] == "TB000002")
+row = perf[(perf["loan_id"] == "TB000001")
            & (perf["period"] == "2020-01")].iloc[0]
-term = loans.loc[loans["loan_id"] == "TB000002",
+term = loans.loc[loans["loan_id"] == "TB000001",
                  "remaining_term_months"].iloc[0]
 bal, pay = row["opening_balance"], row["scheduled_payment"]
 h_rate = lambda r: payment(bal, r, term) - pay
 r_month = newton(h_rate, numerical_slope(h_rate), 0.005)
-rate_tape = loans.loc[loans["loan_id"] == "TB000002",
+rate_tape = loans.loc[loans["loan_id"] == "TB000001",
                       "interest_rate"].iloc[0]
 print(f"balance {bal:,.2f}, payment {pay:,.2f}, term {term}")
 print(f"Implied: {12 * r_month:.4%}  tape: {rate_tape}%")

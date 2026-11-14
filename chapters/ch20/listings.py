@@ -183,8 +183,8 @@ ax.legend(loc="upper right")
 plt.savefig("figures/ch20_cushion.png")
 
 # --- Listing 20.17 -----------------------------------
-print(f"{0.065 / 0.3275:.2%}")
-print(f"{break_even('C', 0.3275, 0.05):.2%}")
+print(f"{0.065 / 0.3330:.2%}")
+print(f"{break_even('C', 0.3330, 0.05):.2%}")
 
 # --- Listing 20.18 -----------------------------------
 sev_20 = levels.copy()

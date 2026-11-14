@@ -185,6 +185,7 @@ for a, b in worse:
         share = stressed.loc[a, cures[a]]
         stressed.loc[a, cures[a]] -= extra * share / available
     stressed.loc[a, b] += extra
+stressed = stressed.clip(lower=0)   # rounding dust below 0
 print("Rows add to 1:", np.allclose(stressed.sum(axis=1), 1))
 print("Smallest entry:", round(stressed.to_numpy().min(), 4))
 print(stressed.loc["90"].round(4).to_string())

@@ -86,7 +86,19 @@ REGIONS = [
 REGION_P = [0.16, 0.15, 0.09, 0.10, 0.08, 0.07, 0.08, 0.10, 0.04, 0.05, 0.06, 0.02]
 
 
-def make_rmbs_loans(rng: np.random.Generator, n: int = 10_000) -> pd.DataFrame:
+REVERSION_MARGIN = 3.75   # % a year over Bank Rate after the fixed period
+
+
+def bank_rate_before_2020(month: int) -> float:
+    """Bank Rate path (% a year) for a month given as a Period ordinal."""
+    for limit, level in [("2016-08", 0.50), ("2017-11", 0.25),
+                         ("2018-08", 0.50)]:
+        if month < pd.Period(limit, "M").ordinal:
+            return level
+    return 0.75
+
+
+def make_rmbs_loans(rng: np.random.Generator, n: int = 10_000):
     cutoff = pd.Timestamp("2019-12-31")
     orig_months_ago = rng.integers(6, 72, n)  # seasoning between 6 months and 6 years
     orig_date = pd.PeriodIndex([cutoff.to_period("M") - int(k) for k in orig_months_ago]).to_timestamp()
@@ -110,15 +122,36 @@ def make_rmbs_loans(rng: np.random.Generator, n: int = 10_000) -> pd.DataFrame:
             + 0.45 * (occupancy == "Buy-to-let") + rng.normal(0, 0.25, n))
     rate = np.clip(rate, 0.9, 5.5).round(2)
 
-    # Current balance at cut-off: amortise repayment loans
-    r = rate / 100 / 12
+    # Month by month from origination to the cut-off date: the initial
+    # fixed rate for the fixed period, then the reversion rate (Bank Rate
+    # plus REVERSION_MARGIN), with the instalment recalculated each month
     nterm = term_years * 12
-    pay = orig_balance * r / (1 - (1 + r) ** (-nterm))
     k = orig_months_ago
-    bal_rep = orig_balance * (1 + r) ** k - pay * ((1 + r) ** k - 1) / r
-    cur_balance = np.where(repayment == "Repayment", bal_rep, orig_balance).round(2)
+    fixed_months = 12 * fixed_years
+    is_rep = repayment == "Repayment"
+    bal = orig_balance.astype(float).copy()
+    cur_rate = rate.astype(float).copy()
+    start = cutoff.to_period("M").ordinal - k   # month of origination
+    for m in range(int(k.max())):
+        live = m < k
+        base = np.array([bank_rate_before_2020(o) for o in start + m])
+        r_m = np.where(m < fixed_months, rate, base + REVERSION_MARGIN)
+        cur_rate = np.where(live, r_m, cur_rate)
+        rm = r_m / 100 / 12
+        pay = bal * rm / (1 - (1 + rm) ** (-(nterm - m)))
+        principal = np.where(is_rep & live, pay - bal * rm, 0.0)
+        bal = bal - principal
+    # rate in the cut-off month: a product that ended on or before
+    # 1 December 2019 pays the reversion rate in December
+    reverted_at_cutoff = k >= fixed_months
+    cur_rate = np.where(reverted_at_cutoff,
+                        bank_rate_before_2020(cutoff.to_period("M").ordinal)
+                        + REVERSION_MARGIN, rate)
+    cur_balance = bal.round(2)
     remaining_term = nterm - k
     current_ltv = (cur_balance / property_value * 100).round(1)
+    initial_rate = rate
+    rate = np.round(cur_rate, 2)
 
     df = pd.DataFrame(
         {
@@ -145,7 +178,7 @@ def make_rmbs_loans(rng: np.random.Generator, n: int = 10_000) -> pd.DataFrame:
             "credit_score": credit_score,
         }
     )
-    return df
+    return df, initial_rate
 
 
 # ---------------------------------------------------------------------------
@@ -154,11 +187,12 @@ def make_rmbs_loans(rng: np.random.Generator, n: int = 10_000) -> pd.DataFrame:
 STATES = ["C", "30", "60", "90", "DEF", "PRE"]
 
 
-def simulate_rmbs_performance(rng, loans: pd.DataFrame, macro: pd.DataFrame):
+def simulate_rmbs_performance(rng, loans: pd.DataFrame, macro: pd.DataFrame,
+                              initial_rate: np.ndarray):
     n = len(loans)
     # Loan-level risk score for the Current -> 30 transition (log-odds)
     x = (
-        -6.55
+        -6.70
         - 0.0090 * (loans["credit_score"].to_numpy() - 820)
         + 0.030 * (loans["original_ltv"].to_numpy() - 75)
         + 0.22 * (loans["loan_to_income"].to_numpy() - 3.5)
@@ -170,16 +204,22 @@ def simulate_rmbs_performance(rng, loans: pd.DataFrame, macro: pd.DataFrame):
     z = macro["credit_factor"].to_numpy()
     hpi = macro["hpi"].to_numpy()
 
-    rate = loans["interest_rate"].to_numpy() / 100 / 12
+    fixed_rate = initial_rate / 100 / 12
+    sonia = macro["sonia"].to_numpy()
     nterm = loans["term_months"].to_numpy()
     seas0 = loans["seasoning_months"].to_numpy()
     ltv0 = loans["original_ltv"].to_numpy()
     is_io = loans["repayment_type"].to_numpy() == "Interest-only"
-    orig_bal = loans["original_balance"].to_numpy()
-    pay = np.where(is_io, orig_bal * rate, orig_bal * rate / (1 - (1 + rate) ** (-nterm)))
     prod_end = pd.to_datetime(loans["product_end_date"]).dt.to_period("M")
     months_to_prod_end = np.array([(p - START).n for p in prod_end])  # month index of product end
 
+    def annuity(balance, r, months):
+        return balance * r / (1 - (1 + r) ** (-months))
+
+    # recovery draws for every loan, made once: the random stream then
+    # does not depend on how many loans default
+    lag_all = rng.integers(9, 22, n)
+    fsd_all = np.clip(rng.normal(0.22, 0.06, n), 0.05, 0.45)
     state = np.zeros(n, dtype=int)  # 0=C,1=30,2=60,3=90,4=DEF,5=PRE
     bal = loans["current_balance"].to_numpy().astype(float).copy()
     prop_value0 = loans["property_value"].to_numpy()
@@ -189,9 +229,24 @@ def simulate_rmbs_performance(rng, loans: pd.DataFrame, macro: pd.DataFrame):
     for t in range(N_MONTHS):
         u = rng.random(n)
         new = state.copy()
+        # Rate this month: fixed until the product ends, then Bank Rate
+        # plus the reversion margin; Bank Rate is 0.75% until February
+        # 2020, then the SONIA series stands in for it
+        reverted = t >= months_to_prod_end
+        bank_rate = 0.75 if t < 2 else sonia[t]   # cut in March 2020
+        rate = np.where(reverted, (bank_rate + REVERSION_MARGIN) / 1200,
+                        fixed_rate)
+        left = nterm - (seas0 + t)
+        pay = np.where(is_io, bal * rate, annuity(bal, rate, left))
+        pay_fixed = np.where(is_io, bal * fixed_rate,
+                             annuity(bal, fixed_rate, left))
+        # Payment shock: the rise of the instalment over the fixed one
+        ratio = np.divide(pay, pay_fixed, out=np.ones(n),
+                          where=pay_fixed > 0)
+        shock = np.clip(ratio - 1, 0, 1.5)
         # From Current
         c = state == 0
-        p30 = logistic(x + 0.45 * z[t])
+        p30 = logistic(x + 0.45 * z[t] + 0.50 * shock)
         # Prepayment: base SMM 0.55%, spike in 3 months after product end, lower when LTV high
         since_end = t - months_to_prod_end
         spike = (since_end >= 0) & (since_end < 3)
@@ -237,12 +292,12 @@ def simulate_rmbs_performance(rng, loans: pd.DataFrame, macro: pd.DataFrame):
         # Defaults: record balance, recovery and loss
         defaulted_now = (new == 4) & (state != 4)
         for i in np.flatnonzero(defaulted_now):
-            months_from_orig = seas0[i] + t
+            months_from_orig = seas0[i] + t + 1  # month t is Jan 2020 + t
             value_now = prop_value0[i] * hpi[t] / 100 * (1 + 0.0015) ** (seas0[i])
-            lag = int(rng.integers(9, 22))
+            lag = int(lag_all[i])
             t_sale = min(t + lag, N_MONTHS - 1)
             value_sale = prop_value0[i] * hpi[t_sale] / 100 * (1 + 0.0015) ** (seas0[i])
-            fsd = float(np.clip(rng.normal(0.22, 0.06), 0.05, 0.45))  # forced-sale discount
+            fsd = float(fsd_all[i])  # forced-sale discount
             costs = 0.045 * value_sale + 3_500
             accrued = bal_new[i] * rate[i] * lag
             exposure = bal_new[i] + accrued
@@ -473,14 +528,17 @@ def make_rating_stresses():
 
 def main():
     DATA.mkdir(exist_ok=True)
-    rng = np.random.default_rng(SEED)
+    # one independent random stream per dataset, all from the seed
+    streams = np.random.SeedSequence(SEED).spawn(4)
+    rng = np.random.default_rng(streams[0])
     macro = make_macro(rng)
-    loans = make_rmbs_loans(rng)
-    perf, defaults = simulate_rmbs_performance(rng, loans, macro)
+    loans, initial_rate = make_rmbs_loans(rng)
+    perf, defaults = simulate_rmbs_performance(rng, loans, macro,
+                                               initial_rate)
     deal = make_deal(loans["current_balance"].sum())
-    cmbs = make_cmbs(rng)
-    auto = make_auto(rng)
-    clo = make_clo(rng)
+    cmbs = make_cmbs(np.random.default_rng(streams[1]))
+    auto = make_auto(np.random.default_rng(streams[2]))
+    clo = make_clo(np.random.default_rng(streams[3]))
 
     write_raw.write_all(DATA / "raw", np.random.default_rng(SEED + 1),
                         macro, loans, perf, defaults, deal, cmbs, auto, clo,

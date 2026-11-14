@@ -74,8 +74,9 @@ print(f"Expected {n * pd_2y.mean():.0f}, observed {k}")
 print(f"p-value {test_result.pvalue:.1e}")
 
 from sfrating import vasicek
-p_corr = vasicek.vasicek_cdf(k / n, pd_2y.mean(), 0.075)
-print(f"P(rate <= observed), rho 0.075: {p_corr:.3f}")
+rho = 0.075  # Chapter 13's estimate for Thamesbridge
+p_corr = vasicek.vasicek_cdf(k / n, pd_2y.mean(), rho)
+print(f"P(rate <= observed), rho {rho}: {p_corr:.3f}")
 
 # --- Listing 21.6 ------------------------------------
 import matplotlib.pyplot as plt

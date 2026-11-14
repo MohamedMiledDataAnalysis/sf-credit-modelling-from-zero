@@ -57,7 +57,7 @@ cd48_observed = curve.loc[curve["month"] == 48,
                           "cumulative_default"].item()
 print(f"Monthly hazard, months 25-36: {hazard:.4%}")
 print(f"CD(48) extended from month 36: {cd48_extended:.2%}")
-print(f"CD(48) observed (907 at risk): {cd48_observed:.2%}")
+print(f"CD(48) observed (886 at risk): {cd48_observed:.2%}")
 
 # --- Listing 17.6 ------------------------------------
 stresses = pd.read_csv("data/rating_stresses.csv")

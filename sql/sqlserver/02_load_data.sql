@@ -25,6 +25,6 @@ FROM 'C:\sfcm\data\rmbs_performance.csv'
 WITH (FORMAT = 'CSV', FIRSTROW = 2, FIELDTERMINATOR = ',',
       ROWTERMINATOR = '0x0a', TABLOCK);
 GO
--- Checks: 10,000 loans, 449,052 performance rows
+-- Checks: 10,000 loans, 450,834 performance rows
 SELECT COUNT(*) AS loans FROM dbo.loans;
 SELECT COUNT(*) AS performance_rows FROM dbo.performance;
